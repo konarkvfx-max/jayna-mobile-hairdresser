@@ -747,6 +747,9 @@ const EarningsStrip = ({ dayBookings, allBookings, todayIso }) => {
 };
 
 // ── Main App ──────────────────────────────────────────────────
+  // ── Main App ──────────────────────────────────────────────────
+const App = () => {
+  const todayIso = getAdelaideToday();
   const [bookings, setBookings] = React.useState([]);
   const [services, setServices] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
