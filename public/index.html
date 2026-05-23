@@ -747,17 +747,14 @@ const EarningsStrip = ({ dayBookings, allBookings, todayIso }) => {
 };
 
 // ── Main App ──────────────────────────────────────────────────
-const App = () => {
-  const todayIso = React.useMemo(() => getAdelaideToday(), []);
-
-  const days = React.useMemo(() => {
-    const base = parseLocalDate(todayIso);
-    const monday = new Date(base);
-    monday.setDate(base.getDate() - ((base.getDay() + 6) % 7));
-    return Array.from({ length: 14 }, (_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return d;
+const today = parseLocalDate(todayIso);
+const twoMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+const defaultDates = [];
+for (let d = new Date(today); d <= twoMonthsAhead; d.setDate(d.getDate() + 1)) {
+  defaultDates.push(isoLocal(new Date(d)));
+}
+const allDates = [...new Set([...defaultDates, ...bookingDates])].sort();
+const days = allDates.map(d => parseLocalDate(d));
     });
   }, [todayIso]);
 
