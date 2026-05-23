@@ -747,17 +747,6 @@ const EarningsStrip = ({ dayBookings, allBookings, todayIso }) => {
 };
 
 // ── Main App ──────────────────────────────────────────────────
-const today = parseLocalDate(todayIso);
-const twoMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 2, 0);
-const defaultDates = [];
-for (let d = new Date(today); d <= twoMonthsAhead; d.setDate(d.getDate() + 1)) {
-  defaultDates.push(isoLocal(new Date(d)));
-}
-const allDates = [...new Set([...defaultDates, ...bookingDates])].sort();
-const days = allDates.map(d => parseLocalDate(d));
-    });
-  }, [todayIso]);
-
   const [bookings, setBookings] = React.useState([]);
   const [services, setServices] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -812,6 +801,14 @@ const days = allDates.map(d => parseLocalDate(d));
   }, [fetchBookings]);
 
   const bookingDates = React.useMemo(() => [...new Set(bookings.map(b => b.date))], [bookings]);
+  const today = parseLocalDate(todayIso);
+const twoMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+const defaultDates = [];
+for (let d = new Date(today); d <= twoMonthsAhead; d.setDate(d.getDate() + 1)) {
+  defaultDates.push(isoLocal(new Date(d)));
+}
+const allDates = [...new Set([...defaultDates, ...bookingDates])].sort();
+const days = allDates.map(d => parseLocalDate(d));
   const dayBookings = React.useMemo(() =>
     bookings.filter(b => b.date === selected).sort((a, b) => a.time.localeCompare(b.time)),
     [bookings, selected]
