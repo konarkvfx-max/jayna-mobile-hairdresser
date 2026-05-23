@@ -1,14 +1,41 @@
-/**
- * Block time route
- * POST /block — blocks a time slot on Jayna's schedule
- * Creates a "visit" in Waitwhile with a blocked/unavailable state
- */
+// Replace /routes/block.js with this:
 
 const express = require('express');
 const router = express.Router();
 const { broadcast } = require('../lib/websocket');
 
 const WAITWHILE_BASE = 'https://api.waitwhile.com/v2';
+
+// Convert HH:MM range to ISO 8601 duration (PT1H30M)
+function timeToDuration(start, end) {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  const totalMinutes = (eh * 60 + em) - (sh * 60 + sm);
+
+  if (totalMinutes <= 0) throw new Error('End time must be after start time');
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  let duration = 'PT';
+  if (hours > 0) duration += `${hours}H`;
+  if (minutes > 0) duration += `${minutes}M`;
+
+  return duration;
+}
+
+// Build ISO startTime with Adelaide timezone offset
+function buildAdelaideTime(dateStr, timeStr) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayOfYear = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 86400000);
+  
+  // Adelaide daylight saving: roughly Oct 1 – Apr 30
+  const isDaylight = dayOfYear >= 274 || dayOfYear < 121;
+  const offset = isDaylight ? '+10:30' : '+09:30';
+  
+  return `${dateStr}T${timeStr}:00${offset}`;
+}
 
 router.post('/', async (req, res) => {
   try {
@@ -18,25 +45,15 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'date, start, and end are required' });
     }
 
-    // Calculate duration in minutes
-    const [sh, sm] = start.split(':').map(Number);
-    const [eh, em] = end.split(':').map(Number);
-    const durationMinutes = (eh * 60 + em) - (sh * 60 + sm);
+    const duration = timeToDuration(start, end);
+    const startTime = buildAdelaideTime(date, start);
 
-    if (durationMinutes <= 0) {
-      return res.status(400).json({ error: 'End time must be after start time' });
-    }
-
-    // Build ISO start time in Adelaide timezone
-    const startTime = `${date}T${start}:00+09:30`;
-
-    // Create a visit marked as a block/break
     const body = {
       locationId: process.env.WAITWHILE_LOCATION_ID,
       firstName: reason || 'Blocked',
       startTime,
-      duration: durationMinutes,
-      state: 'BOOKED',
+      duration,
+      state: 'BLOCKED', // Confirm with Waitwhile docs if this is the right enum
       note: `BLOCKED: ${reason || 'Unavailable'}`,
       serviceIds: [],
     };
