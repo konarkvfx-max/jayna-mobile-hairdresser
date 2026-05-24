@@ -102,8 +102,8 @@ function parseLocalDate(s) {
 }
 
 // ── Icons ─────────────────────────────────────────────────────
-const Icon = ({ name, size = 20, stroke = 'currentColor', fill = 'none', strokeWidth = 1.7 }) => {
-  const p = { width: size, height: size, viewBox: '0 0 24 24', fill, stroke, strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round' };
+const Icon = ({ name, size = 20, stroke = 'currentColor', fill = 'none', strokeWidth = 1.7, style: extraStyle }) => {
+  const p = { width: size, height: size, viewBox: '0 0 24 24', fill, stroke, strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round', style: extraStyle };
   switch (name) {
     case 'phone':    return <svg {...p}><path d="M5 4.5h3.2l1.8 4-2 1.4a11.5 11.5 0 0 0 6.1 6.1l1.4-2 4 1.8V19a1.5 1.5 0 0 1-1.6 1.5C9.7 20 4 14.3 3.5 6.1A1.5 1.5 0 0 1 5 4.5z"/></svg>;
     case 'message':  return <svg {...p}><path d="M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-9l-4.5 3.5v-3.5H4A1.5 1.5 0 0 1 2.5 16V7A1.5 1.5 0 0 1 4 5.5z"/></svg>;
@@ -120,6 +120,8 @@ const Icon = ({ name, size = 20, stroke = 'currentColor', fill = 'none', strokeW
     case 'refresh':  return <svg {...p}><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>;
     case 'wifi-off': return <svg {...p}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>;
     case 'car':      return <svg {...p}><path d="M5 17h14M7 17V9l2-4h6l2 4v8"/><circle cx="8.5" cy="17" r="1.5"/><circle cx="15.5" cy="17" r="1.5"/></svg>;
+    case 'search':   return <svg {...p}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>;
+    case 'copy':     return <svg {...p}><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>;
     default: return null;
   }
 };
@@ -153,6 +155,78 @@ const Card = ({ children, style = {}, onClick }) => (
     boxShadow: '0 1px 0 rgba(255,255,255,0.6) inset, 0 1px 2px rgba(60,52,38,0.04)',
     cursor: onClick ? 'pointer' : 'default', ...style,
   }}>{children}</div>
+);
+
+// ══════════════════════════════════════════════════════════════
+//  SHARED FORM STYLES & HELPER COMPONENTS
+//  ⚠ These MUST be declared at module scope, NOT inside JSX.
+//  Moving them here fixes the blank-screen crash.
+// ══════════════════════════════════════════════════════════════
+const inputStyle = {
+  width: '100%', boxSizing: 'border-box', padding: '12px 14px',
+  borderRadius: 'var(--radius-btn)', border: '1px solid var(--border-soft)',
+  background: 'var(--bg-page)', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600,
+  color: 'var(--text-primary)', outline: 'none',
+};
+
+const primaryBtnStyle = {
+  flex: 1, padding: '14px 16px', borderRadius: 'var(--radius-btn)',
+  background: 'var(--primary)', color: '#fff', fontWeight: 800, fontSize: 14.5,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+  border: 'none', cursor: 'pointer',
+};
+
+const secondaryBtnStyle = {
+  padding: '14px 18px', borderRadius: 'var(--radius-btn)',
+  background: 'var(--bg-secondary)', color: 'var(--text-primary)',
+  fontWeight: 800, fontSize: 14.5,
+  border: '1px solid var(--border-soft)', cursor: 'pointer',
+};
+
+const stepperBtn = {
+  width: 34, height: 34, borderRadius: 999,
+  background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)',
+  color: 'var(--text-primary)', fontSize: 17, fontWeight: 800,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+};
+
+const Field = ({ label, children }) => (
+  <div>
+    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
+    {children}
+  </div>
+);
+
+const Chip = ({ active, onClick, children }) => (
+  <button onClick={onClick} style={{
+    padding: '8px 12px', borderRadius: 999,
+    background: active ? 'var(--primary)' : 'var(--bg-secondary)',
+    color: active ? '#fff' : 'var(--text-primary)',
+    border: '1px solid ' + (active ? 'transparent' : 'var(--border-soft)'),
+    fontSize: 13, fontWeight: 700,
+  }}>{children}</button>
+);
+
+const SheetModal = ({ title, subtitle, onClose, children }) => (
+  <div className="backdrop-in" style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'rgba(28,26,22,0.42)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>
+    <div className="modal-in" onClick={e => e.stopPropagation()} style={{
+      width: '100%', maxHeight: '92dvh', overflowY: 'auto',
+      background: 'var(--bg-card)', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      padding: '12px 20px max(env(safe-area-inset-bottom), 26px)',
+    }}>
+      <div style={{ width: 38, height: 4, borderRadius: 2, background: 'var(--border)', margin: '4px auto 14px' }} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: -0.3 }}>{title}</div>
+          {subtitle && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, fontWeight: 600 }}>{subtitle}</div>}
+        </div>
+        <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 999, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)' }}>
+          <Icon name="x" size={16} strokeWidth={2.2} />
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{children}</div>
+    </div>
+  </div>
 );
 
 // ── Contact button inside booking card ───────────────────────
@@ -337,53 +411,52 @@ const BookingDetailModal = ({ booking, onClose, onRefresh }) => {
     } catch (e) { console.error('Cancel error:', e); }
     setWorking(false);
   };
+
   const handleEdit = async () => {
-  setWorking(true);
-  try {
-    // Build Adelaide ISO time
-    const isDaylight = (() => {
-      const d = new Date(editDate);
-      const day = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
-      return day >= 274 || day < 121;
-    })();
-    const offset = isDaylight ? '+10:30' : '+09:30';
-    const startTime = `${editDate}T${editTime}:00${offset}`;
+    setWorking(true);
+    try {
+      const isDaylight = (() => {
+        const d = new Date(editDate);
+        const day = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+        return day >= 274 || day < 121;
+      })();
+      const offset = isDaylight ? '+10:30' : '+09:30';
+      const startTime = `${editDate}T${editTime}:00${offset}`;
 
-    const visitBody = {
-      phone: editPhone,
-      startTime,
-      customFields: [
-        { id: 'Tsg5TJ2XhBD523zVvenw', values: [editAddress] },
-        { id: 'ZCuDrgB7eDIpoDxDV90v', values: [editPrice.toString()] },
-      ],
-    };
+      const visitBody = {
+        phone: editPhone,
+        startTime,
+        customFields: [
+          { id: 'Tsg5TJ2XhBD523zVvenw', values: [editAddress] },
+          { id: 'ZCuDrgB7eDIpoDxDV90v', values: [editPrice.toString()] },
+        ],
+      };
 
-    const visitRes = await fetch(`${API_URL}/bookings/${booking.id}/edit`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(visitBody),
-    });
-    if (!visitRes.ok) throw new Error(`Visit update failed (${visitRes.status})`);
-
-    // Save notes to customer record
-    if (editNotes && booking.customerId) {
-      await fetch(`${API_URL}/customers/${booking.customerId}/notes`, {
+      const visitRes = await fetch(`${API_URL}/bookings/${booking.id}/edit`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customFields: [{ id: 'EsyazvahjsF62K862TEy', values: [editNotes] }],
-        }),
+        body: JSON.stringify(visitBody),
       });
-    }
+      if (!visitRes.ok) throw new Error(`Visit update failed (${visitRes.status})`);
 
-    setShowEdit(false);
-    onRefresh?.();
-  } catch (e) {
-    console.error('Edit error:', e);
-    alert('Failed to save changes. Try again.');
-  }
-  setWorking(false);
-};
+      if (editNotes && booking.customerId) {
+        await fetch(`${API_URL}/customers/${booking.customerId}/notes`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customFields: [{ id: 'EsyazvahjsF62K862TEy', values: [editNotes] }],
+          }),
+        });
+      }
+
+      setShowEdit(false);
+      onRefresh?.();
+    } catch (e) {
+      console.error('Edit error:', e);
+      alert('Failed to save changes. Try again.');
+    }
+    setWorking(false);
+  };
 
   const noteText = [booking.notes, booking.hairDescription, booking.colourHistory, booking.mobilityNeeds, booking.extraNotes].filter(Boolean).join(' · ');
 
@@ -397,6 +470,7 @@ const BookingDetailModal = ({ booking, onClose, onRefresh }) => {
       }}>
         <div style={{ width: 38, height: 4, borderRadius: 2, background: 'var(--border)', margin: '4px auto 14px' }} />
 
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
           <Avatar initials={booking.initials} tone={booking.avatarTone} size={56} />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -413,12 +487,14 @@ const BookingDetailModal = ({ booking, onClose, onRefresh }) => {
           </button>
         </div>
 
+        {/* Quick actions */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
           <ActionTile icon="phone" label="Call" onClick={() => window.location.href = `tel:${booking.phone}`} />
           <ActionTile icon="message" label="Text" onClick={() => window.location.href = `sms:${booking.phone}`} />
           <ActionTile icon="pin" label="Navigate" primary onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(booking.address)}`, '_blank')} />
         </div>
 
+        {/* Map placeholder */}
         <button onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(booking.address)}`, '_blank')} style={{
           width: '100%', height: 132, borderRadius: 14,
           background: 'linear-gradient(135deg, #E6E2D8 0%, #DBD6C9 100%)',
@@ -447,6 +523,7 @@ const BookingDetailModal = ({ booking, onClose, onRefresh }) => {
           </div>
         </button>
 
+        {/* Details card */}
         <Card style={{ padding: 0, marginBottom: 14 }}>
           <DetailRow icon="clock" label="When">
             <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
@@ -469,153 +546,94 @@ const BookingDetailModal = ({ booking, onClose, onRefresh }) => {
           )}
         </Card>
 
+        {/* Action buttons */}
         <div style={{ display: 'flex', gap: 8 }}>
-  {!confirmed ? (
-    <button onClick={handleConfirm} disabled={working} style={{
-      flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)',
-      background: 'var(--primary)', color: '#fff',
-      fontWeight: 700, fontSize: 15, border: 'none',
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-      opacity: working ? 0.7 : 1,
-    }}>
-      <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
-      {working ? 'Confirming…' : 'Confirm booking'}
-    </button>
-  ) : (
-    <button style={{
-      flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)',
-      background: '#6F8472', color: '#fff',
-      fontWeight: 700, fontSize: 15, border: 'none',
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-    }}>
-      <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
-      Mark complete
-    </button>
-  )}
-  <button onClick={() => setShowEdit(true)} disabled={working} style={{
-    padding: '14px 16px', borderRadius: 'var(--radius-btn)',
-    background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)',
-    color: 'var(--text-primary)', fontWeight: 800, fontSize: 14,
-  }}>Edit</button>
-  <button onClick={handleCancel} disabled={working} style={{
-    padding: '14px 16px', borderRadius: 'var(--radius-btn)',
-    background: 'transparent', border: '1.5px solid #B36B6B',
-    color: '#B36B6B', fontWeight: 800, fontSize: 14,
-    opacity: working ? 0.5 : 1,
-  }}>Cancel</button>
-</div>
+          {!confirmed ? (
+            <button onClick={handleConfirm} disabled={working} style={{
+              flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)',
+              background: 'var(--primary)', color: '#fff',
+              fontWeight: 700, fontSize: 15, border: 'none',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              opacity: working ? 0.7 : 1,
+            }}>
+              <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
+              {working ? 'Confirming…' : 'Confirm booking'}
+            </button>
+          ) : (
+            <button style={{
+              flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)',
+              background: '#6F8472', color: '#fff',
+              fontWeight: 700, fontSize: 15, border: 'none',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
+              <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
+              Mark complete
+            </button>
+          )}
+          <button onClick={() => setShowEdit(true)} disabled={working} style={{
+            padding: '14px 16px', borderRadius: 'var(--radius-btn)',
+            background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)',
+            color: 'var(--text-primary)', fontWeight: 800, fontSize: 14,
+          }}>Edit</button>
+          <button onClick={handleCancel} disabled={working} style={{
+            padding: '14px 16px', borderRadius: 'var(--radius-btn)',
+            background: 'transparent', border: '1.5px solid #B36B6B',
+            color: '#B36B6B', fontWeight: 800, fontSize: 14,
+            opacity: working ? 0.5 : 1,
+          }}>Cancel</button>
+        </div>
 
-{showEdit && (
-  <div className="backdrop-in" style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(28,26,22,0.42)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-end' }} onClick={() => setShowEdit(false)}>
-    <div className="modal-in" onClick={e => e.stopPropagation()} style={{
-      width: '100%', maxHeight: '92dvh', overflowY: 'auto',
-      background: 'var(--bg-card)', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-      padding: '12px 20px max(env(safe-area-inset-bottom), 26px)',
-    }}>
-      <div style={{ width: 38, height: 4, borderRadius: 2, background: 'var(--border)', margin: '4px auto 14px' }} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: -0.3 }}>Edit booking</div>
-        <button onClick={() => setShowEdit(false)} style={{ width: 32, height: 32, borderRadius: 999, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="x" size={16} strokeWidth={2.2} />
-        </button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Field label="Phone">
-          <input value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="+61 4xx xxx xxx" type="tel" style={inputStyle} />
-        </Field>
-        <Field label="Address">
-          <input value={editAddress} onChange={e => setEditAddress(e.target.value)} placeholder="Client's home address" style={inputStyle} />
-        </Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 10 }}>
-          <Field label="Date">
-            <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={inputStyle} />
-          </Field>
-          <Field label="Start time">
-            <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} style={inputStyle} />
-          </Field>
-        </div>
-        <Field label="Final price (AUD)">
-          <input value={editPrice} onChange={e => setEditPrice(e.target.value)} placeholder="e.g. 60" type="number" style={inputStyle} />
-        </Field>
-        <Field label="Client notes">
-          <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="e.g. Prefers no heat, used 7.1 colour last time…" style={{ ...inputStyle, minHeight: 90, resize: 'vertical' }} />
-        </Field>
-        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-          <button onClick={() => setShowEdit(false)} style={secondaryBtnStyle}>Cancel</button>
-          <button onClick={handleEdit} disabled={working} style={{ ...primaryBtnStyle, opacity: working ? 0.7 : 1 }}>
-            <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
-            {working ? 'Saving…' : 'Save changes'}
-          </button>
-        </div>
+        {/* Edit modal */}
+        {showEdit && (
+          <div className="backdrop-in" style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(28,26,22,0.42)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-end' }} onClick={() => setShowEdit(false)}>
+            <div className="modal-in" onClick={e => e.stopPropagation()} style={{
+              width: '100%', maxHeight: '92dvh', overflowY: 'auto',
+              background: 'var(--bg-card)', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+              padding: '12px 20px max(env(safe-area-inset-bottom), 26px)',
+            }}>
+              <div style={{ width: 38, height: 4, borderRadius: 2, background: 'var(--border)', margin: '4px auto 14px' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: -0.3 }}>Edit booking</div>
+                <button onClick={() => setShowEdit(false)} style={{ width: 32, height: 32, borderRadius: 999, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="x" size={16} strokeWidth={2.2} />
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <Field label="Phone">
+                  <input value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="+61 4xx xxx xxx" type="tel" style={inputStyle} />
+                </Field>
+                <Field label="Address">
+                  <input value={editAddress} onChange={e => setEditAddress(e.target.value)} placeholder="Client's home address" style={inputStyle} />
+                </Field>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 10 }}>
+                  <Field label="Date">
+                    <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={inputStyle} />
+                  </Field>
+                  <Field label="Start time">
+                    <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} style={inputStyle} />
+                  </Field>
+                </div>
+                <Field label="Final price (AUD)">
+                  <input value={editPrice} onChange={e => setEditPrice(e.target.value)} placeholder="e.g. 60" type="number" style={inputStyle} />
+                </Field>
+                <Field label="Client notes">
+                  <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="e.g. Prefers no heat, used 7.1 colour last time…" style={{ ...inputStyle, minHeight: 90, resize: 'vertical' }} />
+                </Field>
+                <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                  <button onClick={() => setShowEdit(false)} style={secondaryBtnStyle}>Cancel</button>
+                  <button onClick={handleEdit} disabled={working} style={{ ...primaryBtnStyle, opacity: working ? 0.7 : 1 }}>
+                    <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
+                    {working ? 'Saving…' : 'Save changes'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
-  </div>
-)}
-        
-// ── Shared form helpers ───────────────────────────────────────
-const inputStyle = {
-  width: '100%', boxSizing: 'border-box', padding: '12px 14px',
-  borderRadius: 'var(--radius-btn)', border: '1px solid var(--border-soft)',
-  background: 'var(--bg-page)', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600,
-  color: 'var(--text-primary)', outline: 'none',
+  );
 };
-const primaryBtnStyle = {
-  flex: 1, padding: '14px 16px', borderRadius: 'var(--radius-btn)',
-  background: 'var(--primary)', color: '#fff', fontWeight: 800, fontSize: 14.5,
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-  border: 'none', cursor: 'pointer',
-};
-const secondaryBtnStyle = {
-  padding: '14px 18px', borderRadius: 'var(--radius-btn)',
-  background: 'var(--bg-secondary)', color: 'var(--text-primary)',
-  fontWeight: 800, fontSize: 14.5,
-  border: '1px solid var(--border-soft)', cursor: 'pointer',
-};
-const stepperBtn = {
-  width: 34, height: 34, borderRadius: 999,
-  background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)',
-  color: 'var(--text-primary)', fontSize: 17, fontWeight: 800,
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-};
-
-const Field = ({ label, children }) => (
-  <div>
-    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
-    {children}
-  </div>
-);
-
-const Chip = ({ active, onClick, children }) => (
-  <button onClick={onClick} style={{
-    padding: '8px 12px', borderRadius: 999,
-    background: active ? 'var(--primary)' : 'var(--bg-secondary)',
-    color: active ? '#fff' : 'var(--text-primary)',
-    border: '1px solid ' + (active ? 'transparent' : 'var(--border-soft)'),
-    fontSize: 13, fontWeight: 700,
-  }}>{children}</button>
-);
-
-const SheetModal = ({ title, subtitle, onClose, children }) => (
-  <div className="backdrop-in" style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'rgba(28,26,22,0.42)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>
-    <div className="modal-in" onClick={e => e.stopPropagation()} style={{
-      width: '100%', maxHeight: '92dvh', overflowY: 'auto',
-      background: 'var(--bg-card)', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-      padding: '12px 20px max(env(safe-area-inset-bottom), 26px)',
-    }}>
-      <div style={{ width: 38, height: 4, borderRadius: 2, background: 'var(--border)', margin: '4px auto 14px' }} />
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: -0.3 }}>{title}</div>
-          {subtitle && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, fontWeight: 600 }}>{subtitle}</div>}
-        </div>
-        <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 999, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)' }}>
-          <Icon name="x" size={16} strokeWidth={2.2} />
-        </button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{children}</div>
-    </div>
-  </div>
-);
 
 // ── New Booking Modal ─────────────────────────────────────────
 const NewBookingModal = ({ onClose, serviceCatalogue }) => {
@@ -826,7 +844,6 @@ const ExpandFAB = ({ open, setOpen, onPick }) => (
 // ── Earnings strip ────────────────────────────────────────────
 const EarningsStrip = ({ dayBookings, allBookings, todayIso }) => {
   const todayTotal = dayBookings.reduce((sum, b) => sum + (b.price || 0), 0);
-  // Week = Mon-Sun containing selected day
   const weekTotal = allBookings.reduce((sum, b) => sum + (b.price || 0), 0);
   return (
     <div style={{
@@ -849,7 +866,6 @@ const EarningsStrip = ({ dayBookings, allBookings, todayIso }) => {
 };
 
 // ── Main App ──────────────────────────────────────────────────
-  // ── Main App ──────────────────────────────────────────────────
 const App = () => {
   const todayIso = getAdelaideToday();
   const [bookings, setBookings] = React.useState([]);
@@ -908,13 +924,13 @@ const App = () => {
 
   const bookingDates = React.useMemo(() => [...new Set(bookings.map(b => b.date))], [bookings]);
   const today = parseLocalDate(todayIso);
-const twoMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 2, 0);
-const defaultDates = [];
-for (let d = new Date(today); d <= twoMonthsAhead; d.setDate(d.getDate() + 1)) {
-  defaultDates.push(isoLocal(new Date(d)));
-}
-const allDates = [...new Set([...defaultDates, ...bookingDates])].sort();
-const days = allDates.map(d => parseLocalDate(d));
+  const twoMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+  const defaultDates = [];
+  for (let d = new Date(today); d <= twoMonthsAhead; d.setDate(d.getDate() + 1)) {
+    defaultDates.push(isoLocal(new Date(d)));
+  }
+  const allDates = [...new Set([...defaultDates, ...bookingDates])].sort();
+  const days = allDates.map(d => parseLocalDate(d));
   const dayBookings = React.useMemo(() =>
     bookings.filter(b => b.date === selected).sort((a, b) => a.time.localeCompare(b.time)),
     [bookings, selected]
@@ -929,6 +945,7 @@ const days = allDates.map(d => parseLocalDate(d));
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg-page)', display: 'flex', flexDirection: 'column', fontFamily: "'Nunito Sans', -apple-system, system-ui, sans-serif", color: 'var(--text-primary)', maxWidth: 480, margin: '0 auto', position: 'relative' }}>
 
+      {/* Header */}
       <div style={{
         padding: `max(env(safe-area-inset-top), 16px) 22px 8px`,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -936,9 +953,10 @@ const days = allDates.map(d => parseLocalDate(d));
         borderBottom: '1px solid var(--border-soft)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-         <img src="/jayna-logo.png" alt="Jayna" style={{ width: 36, height: 36, borderRadius: 999, objectFit: 'cover' }} />
+          <img src="/jayna-logo.png" alt="Jayna" style={{ width: 36, height: 36, borderRadius: 999, objectFit: 'cover' }} />
         </div>
         <button onClick={() => setShowNotifications(true)} style={{ width: 40, height: 40, borderRadius: 999, background: 'var(--bg-card)', border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)', position: 'relative' }}>
+          <Icon name="bell" size={18} strokeWidth={1.8} />
           {pendingCount > 0 && (
             <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: '#C79145', color: '#fff', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--bg-page)' }}>
               {pendingCount}
@@ -947,6 +965,7 @@ const days = allDates.map(d => parseLocalDate(d));
         </button>
       </div>
 
+      {/* Scrollable content */}
       <div className="no-scrollbar screen" style={{ flex: 1, overflowY: 'auto', paddingBottom: 110 }}>
         <div style={{ padding: '12px 22px 14px' }}>
           <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.4 }}>
@@ -1002,9 +1021,11 @@ const days = allDates.map(d => parseLocalDate(d));
         </div>
       </div>
 
+      {/* Bottom bar & FAB */}
       <EarningsStrip dayBookings={dayBookings} allBookings={bookings} todayIso={todayIso} />
       <ExpandFAB open={fabOpen} setOpen={setFabOpen} onPick={kind => { setFabOpen(false); setFabModal(kind); }} />
 
+      {/* Modals */}
       {activeBooking && (
         <BookingDetailModal
           booking={activeBooking}
@@ -1014,49 +1035,51 @@ const days = allDates.map(d => parseLocalDate(d));
       )}
       {fabModal === 'new' && <NewBookingModal onClose={handleFabClose} serviceCatalogue={services} />}
       {fabModal === 'block' && <BlockTimeModal onClose={() => setFabModal(null)} />}
+
+      {/* Pending notifications panel */}
       {showNotifications && (
-  <div className="backdrop-in" style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(28,26,22,0.42)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-end' }} onClick={() => setShowNotifications(false)}>
-    <div className="modal-in" onClick={e => e.stopPropagation()} style={{
-      width: '100%', maxHeight: '80dvh', overflowY: 'auto',
-      background: 'var(--bg-card)', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-      padding: '12px 20px max(env(safe-area-inset-bottom), 24px)',
-    }}>
-      <div style={{ width: 38, height: 4, borderRadius: 2, background: 'var(--border)', margin: '4px auto 14px' }} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: -0.3 }}>Pending bookings</div>
-        <button onClick={() => setShowNotifications(false)} style={{ width: 32, height: 32, borderRadius: 999, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)' }}>
-          <Icon name="x" size={16} strokeWidth={2.2} />
-        </button>
-      </div>
-      {bookings.filter(b => b.status === 'pending').length === 0 ? (
-        <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>No pending bookings</div>
-          <div style={{ fontSize: 13, marginTop: 4, fontWeight: 600 }}>You're all caught up!</div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {bookings.filter(b => b.status === 'pending').map(booking => (
-            <button key={booking.id} onClick={() => { setShowNotifications(false); setActiveBooking(booking); }} style={{
-              padding: 0, background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)',
-              borderRadius: 14, textAlign: 'left', cursor: 'pointer',
-            }}>
-              <div style={{ padding: '14px 16px', display: 'flex', gap: 12, alignItems: 'center' }}>
-                <Avatar initials={booking.initials} tone={booking.avatarTone} size={42} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: 15.5, letterSpacing: -0.2 }}>{booking.client}</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, fontWeight: 600 }}>
-                    {booking.services.join(', ')} · {booking.time}
-                  </div>
-                </div>
-                <Icon name="arrow-right" size={16} strokeWidth={2} stroke="var(--text-muted)" />
+        <div className="backdrop-in" style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(28,26,22,0.42)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-end' }} onClick={() => setShowNotifications(false)}>
+          <div className="modal-in" onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxHeight: '80dvh', overflowY: 'auto',
+            background: 'var(--bg-card)', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            padding: '12px 20px max(env(safe-area-inset-bottom), 24px)',
+          }}>
+            <div style={{ width: 38, height: 4, borderRadius: 2, background: 'var(--border)', margin: '4px auto 14px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: -0.3 }}>Pending bookings</div>
+              <button onClick={() => setShowNotifications(false)} style={{ width: 32, height: 32, borderRadius: 999, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)' }}>
+                <Icon name="x" size={16} strokeWidth={2.2} />
+              </button>
+            </div>
+            {bookings.filter(b => b.status === 'pending').length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>No pending bookings</div>
+                <div style={{ fontSize: 13, marginTop: 4, fontWeight: 600 }}>You're all caught up!</div>
               </div>
-            </button>
-          ))}
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {bookings.filter(b => b.status === 'pending').map(booking => (
+                  <button key={booking.id} onClick={() => { setShowNotifications(false); setActiveBooking(booking); }} style={{
+                    padding: 0, background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)',
+                    borderRadius: 14, textAlign: 'left', cursor: 'pointer',
+                  }}>
+                    <div style={{ padding: '14px 16px', display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <Avatar initials={booking.initials} tone={booking.avatarTone} size={42} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: 15.5, letterSpacing: -0.2 }}>{booking.client}</div>
+                        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, fontWeight: 600 }}>
+                          {booking.services.join(', ')} · {booking.time}
+                        </div>
+                      </div>
+                      <Icon name="arrow-right" size={16} strokeWidth={2} stroke="var(--text-muted)" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </div>
-  </div>
-)}
     </div>
   );
 };
