@@ -310,6 +310,13 @@ const ActionTile = ({ icon, label, onClick, primary }) => (
 const BookingDetailModal = ({ booking, onClose, onRefresh }) => {
   const [confirmed, setConfirmed] = React.useState(booking.status === 'confirmed');
   const [working, setWorking] = React.useState(false);
+  const [showEdit, setShowEdit] = React.useState(false);
+  const [editPhone, setEditPhone] = React.useState(booking.phone || '');
+  const [editAddress, setEditAddress] = React.useState(booking.address || '');
+  const [editDate, setEditDate] = React.useState(booking.date || '');
+  const [editTime, setEditTime] = React.useState(booking.time || '');
+  const [editPrice, setEditPrice] = React.useState(booking.price || '');
+  const [editNotes, setEditNotes] = React.useState(booking.notes || '');
 
   const handleConfirm = async () => {
     setWorking(true);
@@ -330,6 +337,53 @@ const BookingDetailModal = ({ booking, onClose, onRefresh }) => {
     } catch (e) { console.error('Cancel error:', e); }
     setWorking(false);
   };
+  const handleEdit = async () => {
+  setWorking(true);
+  try {
+    // Build Adelaide ISO time
+    const isDaylight = (() => {
+      const d = new Date(editDate);
+      const day = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+      return day >= 274 || day < 121;
+    })();
+    const offset = isDaylight ? '+10:30' : '+09:30';
+    const startTime = `${editDate}T${editTime}:00${offset}`;
+
+    const visitBody = {
+      phone: editPhone,
+      startTime,
+      customFields: [
+        { id: 'Tsg5TJ2XhBD523zVvenw', values: [editAddress] },
+        { id: 'ZCuDrgB7eDIpoDxDV90v', values: [editPrice.toString()] },
+      ],
+    };
+
+    const visitRes = await fetch(`${API_URL}/bookings/${booking.id}/edit`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(visitBody),
+    });
+    if (!visitRes.ok) throw new Error(`Visit update failed (${visitRes.status})`);
+
+    // Save notes to customer record
+    if (editNotes && booking.customerId) {
+      await fetch(`${API_URL}/customers/${booking.customerId}/notes`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customFields: [{ id: 'EsyazvahjsF62K862TEy', values: [editNotes] }],
+        }),
+      });
+    }
+
+    setShowEdit(false);
+    onRefresh?.();
+  } catch (e) {
+    console.error('Edit error:', e);
+    alert('Failed to save changes. Try again.');
+  }
+  setWorking(false);
+};
 
   const noteText = [booking.notes, booking.hairDescription, booking.colourHistory, booking.mobilityNeeds, booking.extraNotes].filter(Boolean).join(' · ');
 
@@ -416,40 +470,88 @@ const BookingDetailModal = ({ booking, onClose, onRefresh }) => {
         </Card>
 
         <div style={{ display: 'flex', gap: 8 }}>
-          {!confirmed ? (
-            <button onClick={handleConfirm} disabled={working} style={{
-              flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)',
-              background: 'var(--primary)', color: '#fff',
-              fontWeight: 700, fontSize: 15, border: 'none',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              opacity: working ? 0.7 : 1,
-            }}>
-              <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
-              {working ? 'Confirming…' : 'Confirm booking'}
-            </button>
-          ) : (
-            <button style={{
-              flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)',
-              background: '#6F8472', color: '#fff',
-              fontWeight: 700, fontSize: 15, border: 'none',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}>
-              <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
-              Mark complete
-            </button>
-          )}
-          <button onClick={handleCancel} disabled={working} style={{
-            padding: '14px 16px', borderRadius: 'var(--radius-btn)',
-            background: 'transparent', border: '1.5px solid #B36B6B',
-            color: '#B36B6B', fontWeight: 800, fontSize: 14,
-            opacity: working ? 0.5 : 1,
-          }}>Cancel</button>
+  {!confirmed ? (
+    <button onClick={handleConfirm} disabled={working} style={{
+      flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)',
+      background: 'var(--primary)', color: '#fff',
+      fontWeight: 700, fontSize: 15, border: 'none',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+      opacity: working ? 0.7 : 1,
+    }}>
+      <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
+      {working ? 'Confirming…' : 'Confirm booking'}
+    </button>
+  ) : (
+    <button style={{
+      flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)',
+      background: '#6F8472', color: '#fff',
+      fontWeight: 700, fontSize: 15, border: 'none',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    }}>
+      <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
+      Mark complete
+    </button>
+  )}
+  <button onClick={() => setShowEdit(true)} disabled={working} style={{
+    padding: '14px 16px', borderRadius: 'var(--radius-btn)',
+    background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)',
+    color: 'var(--text-primary)', fontWeight: 800, fontSize: 14,
+  }}>Edit</button>
+  <button onClick={handleCancel} disabled={working} style={{
+    padding: '14px 16px', borderRadius: 'var(--radius-btn)',
+    background: 'transparent', border: '1.5px solid #B36B6B',
+    color: '#B36B6B', fontWeight: 800, fontSize: 14,
+    opacity: working ? 0.5 : 1,
+  }}>Cancel</button>
+</div>
+
+{showEdit && (
+  <div className="backdrop-in" style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(28,26,22,0.42)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-end' }} onClick={() => setShowEdit(false)}>
+    <div className="modal-in" onClick={e => e.stopPropagation()} style={{
+      width: '100%', maxHeight: '92dvh', overflowY: 'auto',
+      background: 'var(--bg-card)', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      padding: '12px 20px max(env(safe-area-inset-bottom), 26px)',
+    }}>
+      <div style={{ width: 38, height: 4, borderRadius: 2, background: 'var(--border)', margin: '4px auto 14px' }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: -0.3 }}>Edit booking</div>
+        <button onClick={() => setShowEdit(false)} style={{ width: 32, height: 32, borderRadius: 999, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="x" size={16} strokeWidth={2.2} />
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Field label="Phone">
+          <input value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="+61 4xx xxx xxx" type="tel" style={inputStyle} />
+        </Field>
+        <Field label="Address">
+          <input value={editAddress} onChange={e => setEditAddress(e.target.value)} placeholder="Client's home address" style={inputStyle} />
+        </Field>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 10 }}>
+          <Field label="Date">
+            <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={inputStyle} />
+          </Field>
+          <Field label="Start time">
+            <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} style={inputStyle} />
+          </Field>
+        </div>
+        <Field label="Final price (AUD)">
+          <input value={editPrice} onChange={e => setEditPrice(e.target.value)} placeholder="e.g. 60" type="number" style={inputStyle} />
+        </Field>
+        <Field label="Client notes">
+          <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="e.g. Prefers no heat, used 7.1 colour last time…" style={{ ...inputStyle, minHeight: 90, resize: 'vertical' }} />
+        </Field>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          <button onClick={() => setShowEdit(false)} style={secondaryBtnStyle}>Cancel</button>
+          <button onClick={handleEdit} disabled={working} style={{ ...primaryBtnStyle, opacity: working ? 0.7 : 1 }}>
+            <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
+            {working ? 'Saving…' : 'Save changes'}
+          </button>
         </div>
       </div>
     </div>
-  );
-};
-
+  </div>
+)}
+        
 // ── Shared form helpers ───────────────────────────────────────
 const inputStyle = {
   width: '100%', boxSizing: 'border-box', padding: '12px 14px',
