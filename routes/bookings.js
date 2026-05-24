@@ -120,25 +120,38 @@ router.post('/:id/cancel', async (req, res) => {
   }
 });
 
-// ── PATCH /bookings/:id/edit ─────────────────────────────────
-router.patch('/:id/edit', async (req, res) => {
+// ── POST /bookings/:id/edit ─────────────────────────────────
+// Waitwhile uses POST (not PATCH) to update visits
+router.post('/:id/edit', async (req, res) => {
   try {
     const { id } = req.params;
     const { phone, startTime, duration, services, customFields } = req.body;
 
-    // Build the visit update body — only include fields Waitwhile accepts on PATCH
+    // Build the visit update body for Waitwhile POST
     const visitBody = {};
 
-    if (startTime) visitBody.startTime = startTime;
-    if (duration) visitBody.duration = duration;
-    if (services && services.length > 0) visitBody.services = services;
-    if (phone) visitBody.client = { phone };
-    if (customFields) visitBody.customFields = customFields;
+    if (startTime) {
+      // Convert ISO with timezone to Waitwhile's local format (YYYY-MM-DDThh:mm Adelaide time)
+      const dt = new Date(startTime);
+      const adelaideFmt = new Intl.DateTimeFormat('en-AU', {
+        timeZone: 'Australia/Adelaide',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      });
+      const parts = {};
+      adelaideFmt.formatToParts(dt).forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
+      visitBody.date = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+    }
 
-    console.log(`[PATCH /bookings/${id}/edit] Sending to Waitwhile:`, JSON.stringify(visitBody, null, 2));
+    if (duration) visitBody.duration = duration * 60; // convert minutes to seconds
+    if (services && services.length > 0) visitBody.serviceIds = services;
+    if (phone) visitBody.phone = phone;
+    if (customFields) visitBody.dataFields = customFields;
+
+    console.log(`[POST /bookings/${id}/edit] Sending to Waitwhile:`, JSON.stringify(visitBody, null, 2));
 
     const apiRes = await fetch(`${WAITWHILE_BASE}/visits/${id}`, {
-      method: 'PATCH',
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': process.env.WAITWHILE_API_KEY,
@@ -148,15 +161,15 @@ router.patch('/:id/edit', async (req, res) => {
 
     if (!apiRes.ok) {
       const errBody = await apiRes.text();
-      console.error(`[PATCH /bookings/${id}/edit] Waitwhile error:`, errBody);
-      throw new Error(`Waitwhile PATCH failed (${apiRes.status}): ${errBody}`);
+      console.error(`[POST /bookings/${id}/edit] Waitwhile error:`, errBody);
+      throw new Error(`Waitwhile POST failed (${apiRes.status}): ${errBody}`);
     }
 
     const data = await apiRes.json();
     broadcast('booking_update', { visitId: id });
     res.json(data);
   } catch (err) {
-    console.error('[PATCH /bookings/:id/edit]', err.message);
+    console.error('[POST /bookings/:id/edit]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
