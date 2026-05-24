@@ -33,6 +33,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ── API routes ───────────────────────────────────────────────
 app.use('/bookings', require('./routes/bookings'));
+app.use('/customers', require('./routes/customers'));
 app.use('/services', require('./routes/services'));
 app.use('/schedule-with-drive-times', require('./routes/schedule'));
 app.use('/webhook', require('./routes/webhook'));
