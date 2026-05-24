@@ -405,7 +405,7 @@ const BookingDetailModal = ({ booking, onClose, onRefresh, onCopy, serviceCatalo
       };
 
       const visitRes = await fetch(`${API_URL}/bookings/${booking.id}/edit`, {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(visitBody),
       });
