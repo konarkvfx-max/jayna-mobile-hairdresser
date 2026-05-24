@@ -124,18 +124,34 @@ router.post('/:id/cancel', async (req, res) => {
 router.patch('/:id/edit', async (req, res) => {
   try {
     const { id } = req.params;
+    const { phone, startTime, duration, services, customFields } = req.body;
+
+    // Build the visit update body — only include fields Waitwhile accepts on PATCH
+    const visitBody = {};
+
+    if (startTime) visitBody.startTime = startTime;
+    if (duration) visitBody.duration = duration;
+    if (services && services.length > 0) visitBody.services = services;
+    if (phone) visitBody.client = { phone };
+    if (customFields) visitBody.customFields = customFields;
+
+    console.log(`[PATCH /bookings/${id}/edit] Sending to Waitwhile:`, JSON.stringify(visitBody, null, 2));
+
     const apiRes = await fetch(`${WAITWHILE_BASE}/visits/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         'apikey': process.env.WAITWHILE_API_KEY,
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify(visitBody),
     });
+
     if (!apiRes.ok) {
       const errBody = await apiRes.text();
+      console.error(`[PATCH /bookings/${id}/edit] Waitwhile error:`, errBody);
       throw new Error(`Waitwhile PATCH failed (${apiRes.status}): ${errBody}`);
     }
+
     const data = await apiRes.json();
     broadcast('booking_update', { visitId: id });
     res.json(data);
