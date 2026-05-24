@@ -118,3 +118,39 @@ router.post('/:id/cancel', async (req, res) => {
 });
 
 module.exports = router;
+
+// PATCH /bookings/:id/edit
+router.patch('/:id/edit', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const apiRes = await fetch(`${WAITWHILE_BASE}/visits/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'apikey': process.env.WAITWHILE_API_KEY },
+      body: JSON.stringify(req.body),
+    });
+    if (!apiRes.ok) throw new Error(`Waitwhile PATCH failed (${apiRes.status})`);
+    const data = await apiRes.json();
+    res.json(data);
+  } catch (err) {
+    console.error('[PATCH /bookings/:id/edit]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /customers/:id/notes
+router.patch('/:id/notes', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const apiRes = await fetch(`${WAITWHILE_BASE}/customers/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'apikey': process.env.WAITWHILE_API_KEY },
+      body: JSON.stringify(req.body),
+    });
+    if (!apiRes.ok) throw new Error(`Waitwhile customer PATCH failed (${apiRes.status})`);
+    const data = await apiRes.json();
+    res.json(data);
+  } catch (err) {
+    console.error('[PATCH /customers/:id/notes]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
