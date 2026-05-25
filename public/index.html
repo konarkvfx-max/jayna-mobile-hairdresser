@@ -284,14 +284,15 @@ const WeekStrip = ({ days, selected, onSelect, bookingDates, todayIso }) => {
 
 // ── Booking card ──────────────────────────────────────────────
 const BookingCard = ({ booking, onOpen }) => {
-  const isPending = booking.status === 'pending';
+  const isPending   = booking.status === 'pending';
+  const isCompleted = booking.status === 'completed';
   return (
-    <Card onClick={() => onOpen(booking)} style={{ padding: 0 }}>
+    <Card onClick={() => onOpen(booking)} style={{ padding: 0, opacity: isCompleted ? 0.55 : 1 }}>
       <div style={{ padding: '16px 16px 14px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
         <Avatar initials={booking.initials} tone={booking.avatarTone} size={46} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: -0.2 }}>{booking.client}</div>
+            <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: -0.2, textDecoration: isCompleted ? 'line-through' : 'none' }}>{booking.client}</div>
             <div style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap' }}>${booking.price}</div>
           </div>
           <div style={{ marginTop: 5, fontSize: 14.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -317,6 +318,12 @@ const BookingCard = ({ booking, onOpen }) => {
         <div style={{ padding: '8px 14px', borderTop: '1px solid var(--border-soft)', background: 'rgba(199,145,69,0.07)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#7d5419', fontWeight: 700, borderBottomLeftRadius: 'var(--radius-card)', borderBottomRightRadius: 'var(--radius-card)' }}>
           <Icon name="dot" size={12} stroke="#c79145" />
           Awaiting confirmation
+        </div>
+      )}
+      {isCompleted && (
+        <div style={{ padding: '8px 14px', borderTop: '1px solid var(--border-soft)', background: 'rgba(139,158,140,0.08)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--primary-deep)', fontWeight: 700, borderBottomLeftRadius: 'var(--radius-card)', borderBottomRightRadius: 'var(--radius-card)' }}>
+          <Icon name="check" size={12} strokeWidth={2.4} stroke="var(--primary-deep)" />
+          Completed
         </div>
       )}
     </Card>
@@ -351,6 +358,7 @@ const ActionTile = ({ icon, label, onClick, primary }) => (
 // ══════════════════════════════════════════════════════════════
 const BookingDetailModal = ({ booking, onClose, onRefresh, onCopy, serviceCatalogue }) => {
   const [confirmed, setConfirmed] = React.useState(booking.status === 'confirmed');
+  const [completed, setCompleted] = React.useState(booking.status === 'completed');
   const [working, setWorking] = React.useState(false);
   const [showEdit, setShowEdit] = React.useState(false);
 
@@ -383,6 +391,17 @@ const BookingDetailModal = ({ booking, onClose, onRefresh, onCopy, serviceCatalo
       await fetch(`${API_URL}/bookings/${booking.id}/cancel`, { method: 'POST' });
       onRefresh?.(); onClose();
     } catch (e) { console.error(e); }
+    setWorking(false);
+  };
+
+  const handleComplete = async () => {
+    if (!window.confirm(`Mark ${booking.client}'s appointment as complete?`)) return;
+    setWorking(true);
+    try {
+      const res = await fetch(`${API_URL}/bookings/${booking.id}/complete`, { method: 'POST' });
+      if (res.ok) { setCompleted(true); setConfirmed(true); onRefresh?.(); }
+      else { const e = await res.json(); alert('Could not mark complete: ' + (e.detail || e.error)); }
+    } catch (e) { console.error(e); alert('Network error. Try again.'); }
     setWorking(false);
   };
 
@@ -420,6 +439,8 @@ const BookingDetailModal = ({ booking, onClose, onRefresh, onCopy, serviceCatalo
       }
 
       setShowEdit(false);
+      // Store the custom price override in localStorage
+      localStorage.setItem(`booking_price_${booking.id}`, String(editPrice));
       onRefresh?.();
     } catch (e) {
       console.error('Edit error:', e);
@@ -502,19 +523,24 @@ const BookingDetailModal = ({ booking, onClose, onRefresh, onCopy, serviceCatalo
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          {!confirmed ? (
+          {completed ? (
+            <div style={{ flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)', background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', fontWeight: 700, fontSize: 15, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <Icon name="check" size={16} strokeWidth={2.2} stroke="var(--text-muted)" />
+              Completed
+            </div>
+          ) : !confirmed ? (
             <button onClick={handleConfirm} disabled={working} style={{ flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)', background: 'var(--primary)', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: working ? 0.7 : 1 }}>
               <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
               {working ? 'Confirming…' : 'Confirm booking'}
             </button>
           ) : (
-            <button style={{ flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)', background: '#6F8472', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <button onClick={handleComplete} disabled={working} style={{ flex: 1, padding: '14px 18px', borderRadius: 'var(--radius-btn)', background: '#6F8472', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: working ? 0.7 : 1 }}>
               <Icon name="check" size={16} strokeWidth={2.2} stroke="#fff" />
-              Mark complete
+              {working ? 'Saving…' : 'Mark complete'}
             </button>
           )}
-          <button onClick={() => setShowEdit(true)} disabled={working} style={{ padding: '14px 16px', borderRadius: 'var(--radius-btn)', background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', fontWeight: 800, fontSize: 14 }}>Edit</button>
-          <button onClick={handleCancel} disabled={working} style={{ padding: '14px 16px', borderRadius: 'var(--radius-btn)', background: 'transparent', border: '1.5px solid #B36B6B', color: '#B36B6B', fontWeight: 800, fontSize: 14, opacity: working ? 0.5 : 1 }}>Cancel</button>
+          {!completed && <button onClick={() => setShowEdit(true)} disabled={working} style={{ padding: '14px 16px', borderRadius: 'var(--radius-btn)', background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', fontWeight: 800, fontSize: 14 }}>Edit</button>}
+          {!completed && <button onClick={handleCancel} disabled={working} style={{ padding: '14px 16px', borderRadius: 'var(--radius-btn)', background: 'transparent', border: '1.5px solid #B36B6B', color: '#B36B6B', fontWeight: 800, fontSize: 14, opacity: working ? 0.5 : 1 }}>Cancel</button>}
         </div>
 
         {/* Copy/Repeat button */}
@@ -637,6 +663,25 @@ const NewBookingModal = ({ onClose, serviceCatalogue, prefill }) => {
           <input type="time" value={time} onChange={e => setTime(e.target.value)} style={inputStyle} />
         </Field>
       </div>
+      {/* Conflict warning — show existing bookings on selected date */}
+      {(() => {
+        const clashes = (prefill ? [] : (window.__allBookings || [])).filter(b =>
+          b.date === date && b.status !== 'completed' && b.status !== 'cancelled'
+        );
+        if (!clashes.length) return null;
+        return (
+          <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(199,145,69,0.1)', border: '1px solid rgba(199,145,69,0.3)' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#7d5419', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+              ⚠ Already booked on this day
+            </div>
+            {clashes.map(b => (
+              <div key={b.id} style={{ fontSize: 13, fontWeight: 600, color: '#7d5419', marginBottom: 4 }}>
+                {b.time} – {b.timeEnd} · {b.client} · {b.services.join(', ')}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
       <DurationPicker duration={duration} setDuration={setDuration} customDuration={customDur} setCustomDuration={setCustomDur} />
       <Field label="Address">
         <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Client's home address" style={inputStyle} />
@@ -865,6 +910,7 @@ const App = () => {
       if (!res.ok) throw new Error(`Server error (${res.status})`);
       const data = await res.json();
       setBookings(data);
+      window.__allBookings = data; // expose for conflict checker in new booking modal
       const hasTodayBookings = data.some(b => b.date === todayIso);
       if (!hasTodayBookings) {
         const future = [...data].filter(b => b.date >= todayIso).sort((a, b) => a.date.localeCompare(b.date));
@@ -899,9 +945,9 @@ const App = () => {
   const bookingDates = React.useMemo(() => [...new Set(bookings.map(b => b.date))], [bookings]);
 
   const today = parseLocalDate(todayIso);
-  const twoMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+  const twelveMonthsAhead = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
   const defaultDates = [];
-  for (let d = new Date(today); d <= twoMonthsAhead; d.setDate(d.getDate() + 1)) defaultDates.push(isoLocal(new Date(d)));
+  for (let d = new Date(today); d <= twelveMonthsAhead; d.setDate(d.getDate() + 1)) defaultDates.push(isoLocal(new Date(d)));
   const allDates = [...new Set([...defaultDates, ...bookingDates])].sort();
   const days = allDates.map(d => parseLocalDate(d));
 
