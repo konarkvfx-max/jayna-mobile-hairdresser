@@ -58,23 +58,50 @@ function cleanPhone(p){if(!p)return'';return p.replace(/[\s\-().]/g,'');}
 
 // ── Build client directory from bookings array ────────────────
 // Keyed by cleaned phone. Most recent booking per client wins.
-function buildDirectory(bookings){
-  const dir={};
-  const sorted=[...bookings].sort((a,b)=>b.date.localeCompare(a.date));
-  for(const b of sorted){
-    const key=cleanPhone(b.phone)||b.client;
-    if(!key)continue;
-    if(!dir[key]){
-      dir[key]={
-        name:b.client,
-        phone:cleanPhone(b.phone),
-        address:b.address||'',
-        initials:b.initials,
-        avatarTone:b.avatarTone,
+function buildDirectory(bookings, customers = []) {
+  const dir = {};
+  
+  // First, add all Waitwhile customers
+  for (const c of customers) {
+    const key = cleanPhone(c.phone) || c.name;
+    if (!key) continue;
+    dir[key] = {
+      name: c.name,
+      phone: cleanPhone(c.phone),
+      address: '', // Customers don't have addresses — use empty string
+      initials: c.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2),
+      avatarTone: generateTone(c.name),
+    };
+  }
+  
+  // Then overlay bookings (address + recent data wins)
+  const sorted = [...bookings].sort((a, b) => b.date.localeCompare(a.date));
+  for (const b of sorted) {
+    const key = cleanPhone(b.phone) || b.client;
+    if (!key) continue;
+    if (dir[key]) {
+      // Update existing customer with booking data
+      if (b.address) dir[key].address = b.address;
+    } else {
+      // New client from booking
+      dir[key] = {
+        name: b.client,
+        phone: cleanPhone(b.phone),
+        address: b.address || '',
+        initials: b.initials,
+        avatarTone: b.avatarTone,
       };
     }
   }
+  
   return Object.values(dir);
+}
+
+// Helper to generate avatar tone from name
+function generateTone(name) {
+  const tones = ['#E8DFD2', '#D2E0E8', '#DDE8D2', '#E8D2D2', '#D8D2E8', '#E8E0D2', '#D2E8E0'];
+  const idx = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % tones.length;
+  return tones[idx];
 }
 
 const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -772,28 +799,50 @@ const App=()=>{
     setLoading(false);
   },[todayIso]);
 
-  React.useEffect(()=>{
-    fetchBookings();
-    fetch(`${API_URL}/services`).then(r=>r.ok?r.json():[]).then(setServices).catch(()=>{});
-    const proto=location.protocol==='https:'?'wss:':'ws:';
-    let ws,retry;
-    const connect=()=>{try{ws=new WebSocket(`${proto}//${location.host}`);ws.onmessage=({data})=>{try{const msg=JSON.parse(data);if(['booking_update','refresh','booking_created','booking_cancelled'].includes(msg.type))fetchBookings();}catch{}};ws.onclose=()=>{retry=setTimeout(connect,5000);};ws.onerror=()=>ws.close();}catch{}};
-    connect();
-    return()=>{ws?.close();clearTimeout(retry);};
-  },[fetchBookings]);
+React.useEffect(() => {
+  fetchBookings();
+  fetch(`${API_URL}/services`).then(r => r.ok ? r.json() : []).then(setServices).catch(() => {});
+  
+  // NEW: Fetch all customers from Waitwhile
+  fetch(`${API_URL}/customers`)
+    .then(r => r.ok ? r.json() : [])
+    .then(customers => {
+      window.__allCustomers = customers;
+    })
+    .catch(() => {});
+    
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  let ws, retry;
+  const connect = () => {
+    try {
+      ws = new WebSocket(`${proto}//${location.host}`);
+      ws.onmessage = ({ data }) => {
+        try {
+          const msg = JSON.parse(data);
+          if (['booking_update', 'refresh', 'booking_created', 'booking_cancelled'].includes(msg.type)) fetchBookings();
+        } catch {}
+      };
+      ws.onclose = () => { retry = setTimeout(connect, 5000); };
+      ws.onerror = () => ws.close();
+    } catch {}
+  };
+  connect();
+  return () => { ws?.close(); clearTimeout(retry); };
+}, [fetchBookings]);
 
-  const bookingDates=React.useMemo(()=>[...new Set(bookings.map(b=>b.date))],[bookings]);
-  const allDays=React.useMemo(()=>{
-    const end=new Date(todayDate.getFullYear()+1,todayDate.getMonth()+1,0);
-    const days=[];for(let d=new Date(todayDate);d<=end;d.setDate(d.getDate()+1))days.push(new Date(d));
-    return days;
-  },[todayIso]);
-  const dayBookings=React.useMemo(()=>bookings.filter(b=>b.date===selected).sort((a,b)=>a.time.localeCompare(b.time)),[bookings,selected]);
-  const pendingCount=bookings.filter(b=>b.status==='pending').length;
-
-  const handleFabClose=shouldRefresh=>{setFabModal(null);setCopyPrefill(null);if(shouldRefresh)fetchBookings();};
-  const handleCopy=booking=>{setCopyPrefill(booking);setFabModal('new');};
-  const handleSelectBooking=b=>{setActiveBooking(b);setSelected(b.date);const d=parseLocalDate(b.date);setViewYear(d.getFullYear());setViewMonth(d.getMonth());};
+  
+ const bookingDates=React.useMemo(()=>[...new Set(bookings.map(b=>b.date))],[bookings]);
+const allDays=React.useMemo(()=>{
+  const end=new Date(todayDate.getFullYear()+1,todayDate.getMonth()+1,0);
+  const days=[];for(let d=new Date(todayDate);d<=end;d.setDate(d.getDate()+1))days.push(new Date(d));
+  return days;
+},[todayIso]);
+const dayBookings=React.useMemo(()=>bookings.filter(b=>b.date===selected).sort((a,b)=>a.time.localeCompare(b.time)),[bookings,selected]);
+const directory=React.useMemo(()=>buildDirectory(bookings,window.__allCustomers||[]),[bookings]);
+const pendingCount=bookings.filter(b=>b.status==='pending').length;
+const handleFabClose=shouldRefresh=>{setFabModal(null);setCopyPrefill(null);if(shouldRefresh)fetchBookings();};
+const handleCopy=booking=>{setCopyPrefill(booking);setFabModal('new');};
+const handleSelectBooking=b=>{setActiveBooking(b);setSelected(b.date);const d=parseLocalDate(b.date);setViewYear(d.getFullYear());setViewMonth(d.getMonth());};
 
   // Open new booking modal pre-filled from directory (via search)
   const handleBookFromDirectory=client=>{
