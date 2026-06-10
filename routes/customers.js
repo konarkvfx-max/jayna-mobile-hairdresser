@@ -1,43 +1,33 @@
 /**
  * Customers routes
- * GET  /customers         — fetch all customers from Waitwhile
+ * GET  /customers        — full customer list from Waitwhile (for search/autocomplete)
  * PATCH /customers/:id/notes — update customer custom fields (notes)
  */
 
 const express = require('express');
-const router = express.Router();
+const router  = require('express').Router();
+const { getCustomers } = require('../lib/waitwhile');
 
 const WAITWHILE_BASE = 'https://api.waitwhile.com/v2';
 
-// ── GET /customers — fetch all customers from Waitwhile ────────
+// ── Simple in-memory cache — rebuilds on restart (by design) ─
+let cachedCustomers   = null;
+let customersCachedAt = 0;
+const CACHE_TTL       = 5 * 60 * 1000; // 5 minutes
+
+// ── GET /customers ────────────────────────────────────────────
+// Returns all Waitwhile customers, shaped for the frontend directory.
+// Cached for 5 minutes — stale-on-restart is intentional (clears bad data).
 router.get('/', async (req, res) => {
   try {
-    const params = new URLSearchParams({
-      locationId: process.env.WAITWHILE_LOCATION_ID,
-      limit: '100',
-    });
-
-    const apiRes = await fetch(`${WAITWHILE_BASE}/customers?${params}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': process.env.WAITWHILE_API_KEY,
-      },
-    });
-
-    if (!apiRes.ok) {
-      const errBody = await apiRes.text();
-      throw new Error(`Waitwhile GET /customers failed (${apiRes.status}): ${errBody}`);
+    const now = Date.now();
+    if (cachedCustomers && (now - customersCachedAt) < CACHE_TTL) {
+      return res.json(cachedCustomers);
     }
 
-    const data = await apiRes.json();
-    const customers = (data.results || data || []).map(c => ({
-      id: c.id,
-      name: [c.firstName, c.lastName].filter(Boolean).join(' ') || 'Client',
-      phone: c.phone || '',
-      email: c.email || '',
-      lastVisit: c.lastVisitDate || null,
-    }));
-
+    const customers      = await getCustomers();
+    cachedCustomers      = customers;
+    customersCachedAt    = now;
     res.json(customers);
   } catch (err) {
     console.error('[GET /customers] Error:', err.message);
@@ -45,8 +35,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-
-// ── PATCH /customers/:id/notes ───────────────────────────────
+// ── PATCH /customers/:id/notes ────────────────────────────────
 router.patch('/:id/notes', async (req, res) => {
   try {
     const { id } = req.params;
