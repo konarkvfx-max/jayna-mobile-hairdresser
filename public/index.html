@@ -11,27 +11,28 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800;6..12,900&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --bg-page: #F4F1EB; --bg-card: #F9F7F3; --bg-secondary: #F0EDE8;
-    --text-primary: #2C2C2A; --text-muted: #807F7B; --text-soft: #A6A29C;
-    --primary: #8B9E8C; --primary-deep: #6F8472; --primary-soft: #D8DFD7;
-    --on-primary: #FFFFFF; --border: #E4DFD7; --border-soft: #ECE7DF;
-    --radius-btn: 8px; --radius-card: 18px;
+    --bg-page:#F4F1EB;--bg-card:#F9F7F3;--bg-secondary:#F0EDE8;
+    --text-primary:#2C2C2A;--text-muted:#807F7B;--text-soft:#A6A29C;
+    --primary:#8B9E8C;--primary-deep:#6F8472;--primary-soft:#D8DFD7;
+    --border:#E4DFD7;--border-soft:#ECE7DF;
+    --radius-btn:8px;--radius-card:18px;
   }
-  *, *::before, *::after { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; font-family: 'Nunito Sans', -apple-system, system-ui, sans-serif; background: var(--bg-page); color: var(--text-primary); min-height: 100dvh; -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
-  #root { min-height: 100dvh; }
-  button { font-family: inherit; cursor: pointer; border: none; background: none; padding: 0; color: inherit; -webkit-tap-highlight-color: transparent; }
-  input, select, textarea { font-family: inherit; }
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { scrollbar-width: none; }
-  .screen { animation: screenIn 240ms cubic-bezier(.2,.8,.2,1); }
-  @keyframes screenIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-  .modal-in { animation: modalIn 260ms cubic-bezier(.2,.8,.2,1); }
-  @keyframes modalIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-  .backdrop-in { animation: fadeIn 200ms ease both; }
-  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-  @keyframes fabIn { from { opacity:0; transform:translateY(8px) scale(0.96); } to { opacity:1; transform:translateY(0) scale(1); } }
-  @keyframes spin { to { transform:rotate(360deg); } }
+  *,*::before,*::after{box-sizing:border-box;}
+  html,body{margin:0;padding:0;font-family:'Nunito Sans',-apple-system,system-ui,sans-serif;background:var(--bg-page);color:var(--text-primary);min-height:100dvh;-webkit-font-smoothing:antialiased;overscroll-behavior:none;}
+  #root{min-height:100dvh;}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;padding:0;color:inherit;-webkit-tap-highlight-color:transparent;}
+  input,select,textarea{font-family:inherit;}
+  .no-scrollbar::-webkit-scrollbar{display:none;}
+  .no-scrollbar{scrollbar-width:none;}
+  .screen{animation:screenIn 240ms cubic-bezier(.2,.8,.2,1);}
+  @keyframes screenIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  .modal-in{animation:modalIn 260ms cubic-bezier(.2,.8,.2,1);}
+  @keyframes modalIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+  .backdrop-in{animation:fadeIn 200ms ease both;}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes fabIn{from{opacity:0;transform:translateY(8px) scale(0.96);}to{opacity:1;transform:translateY(0) scale(1);}}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  @keyframes dropIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
 </style>
 </head>
 <body>
@@ -40,55 +41,81 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
 <script type="text/babel">
-const API_URL = '';
+const API_URL='';
 
-function getAdelaideToday() {
-  const parts = new Intl.DateTimeFormat('en-AU',{timeZone:'Australia/Adelaide',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+// ── Helpers ───────────────────────────────────────────────────
+function getAdelaideToday(){
+  const parts=new Intl.DateTimeFormat('en-AU',{timeZone:'Australia/Adelaide',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
   const p={};parts.forEach(x=>{if(x.type!=='literal')p[x.type]=x.value;});
-  return `${p.year}-${p.month}-${p.day}`;
+  return`${p.year}-${p.month}-${p.day}`;
 }
-function isoLocal(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function isoLocal(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function parseLocalDate(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
 function adelaideOffset(dateStr){const d=new Date(dateStr);const day=Math.floor((d-new Date(d.getFullYear(),0,0))/86400000);return(day>=274||day<121)?'+10:30':'+09:30';}
 
+// ── Clean phone: strip spaces/dashes, store digits+leading+ only ──
+function cleanPhone(p){if(!p)return'';return p.replace(/[\s\-().]/g,'');}
+
+// ── Build client directory from bookings array ────────────────
+// Keyed by cleaned phone. Most recent booking per client wins.
+function buildDirectory(bookings){
+  const dir={};
+  const sorted=[...bookings].sort((a,b)=>b.date.localeCompare(a.date));
+  for(const b of sorted){
+    const key=cleanPhone(b.phone)||b.client;
+    if(!key)continue;
+    if(!dir[key]){
+      dir[key]={
+        name:b.client,
+        phone:cleanPhone(b.phone),
+        address:b.address||'',
+        initials:b.initials,
+        avatarTone:b.avatarTone,
+      };
+    }
+  }
+  return Object.values(dir);
+}
+
 const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+// ── Icons ─────────────────────────────────────────────────────
 const Icon=({name,size=20,stroke='currentColor',fill='none',strokeWidth=1.7,style:s})=>{
   const p={width:size,height:size,viewBox:'0 0 24 24',fill,stroke,strokeWidth,strokeLinecap:'round',strokeLinejoin:'round',style:s};
   switch(name){
-    case 'phone':      return <svg {...p}><path d="M5 4.5h3.2l1.8 4-2 1.4a11.5 11.5 0 0 0 6.1 6.1l1.4-2 4 1.8V19a1.5 1.5 0 0 1-1.6 1.5C9.7 20 4 14.3 3.5 6.1A1.5 1.5 0 0 1 5 4.5z"/></svg>;
-    case 'message':    return <svg {...p}><path d="M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-9l-4.5 3.5v-3.5H4A1.5 1.5 0 0 1 2.5 16V7A1.5 1.5 0 0 1 4 5.5z"/></svg>;
-    case 'pin':        return <svg {...p}><path d="M12 21s7-6.2 7-11.3a7 7 0 0 0-14 0C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.7" r="2.5"/></svg>;
-    case 'plus':       return <svg {...p}><path d="M12 5v14M5 12h14"/></svg>;
-    case 'check':      return <svg {...p}><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>;
-    case 'clock':      return <svg {...p}><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>;
-    case 'bell':       return <svg {...p}><path d="M6 16.5V11a6 6 0 1 1 12 0v5.5l1.5 2H4.5l1.5-2z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>;
-    case 'calendar':   return <svg {...p}><rect x="3.5" y="5" width="17" height="15" rx="2.2"/><path d="M3.5 9.5h17"/><path d="M8 3v4M16 3v4"/></svg>;
-    case 'scissors':   return <svg {...p}><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 8l12 12M8 16L20 4"/></svg>;
-    case 'x':          return <svg {...p}><path d="M6 6l12 12M18 6L6 18"/></svg>;
-    case 'arrow-right':return <svg {...p}><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>;
-    case 'arrow-left': return <svg {...p}><path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/></svg>;
-    case 'dot':        return <svg {...p}><circle cx="12" cy="12" r="2.5" fill={stroke} stroke="none"/></svg>;
-    case 'refresh':    return <svg {...p}><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>;
-    case 'wifi-off':   return <svg {...p}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>;
-    case 'car':        return <svg {...p}><path d="M5 17h14M7 17V9l2-4h6l2 4v8"/><circle cx="8.5" cy="17" r="1.5"/><circle cx="15.5" cy="17" r="1.5"/></svg>;
-    case 'search':     return <svg {...p}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>;
-    case 'copy':       return <svg {...p}><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>;
-    case 'user':       return <svg {...p}><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>;
-    case 'chevron-down':return <svg {...p}><path d="M6 9l6 6 6-6"/></svg>;
-    default: return null;
+    case'phone':       return<svg {...p}><path d="M5 4.5h3.2l1.8 4-2 1.4a11.5 11.5 0 0 0 6.1 6.1l1.4-2 4 1.8V19a1.5 1.5 0 0 1-1.6 1.5C9.7 20 4 14.3 3.5 6.1A1.5 1.5 0 0 1 5 4.5z"/></svg>;
+    case'message':     return<svg {...p}><path d="M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-9l-4.5 3.5v-3.5H4A1.5 1.5 0 0 1 2.5 16V7A1.5 1.5 0 0 1 4 5.5z"/></svg>;
+    case'pin':         return<svg {...p}><path d="M12 21s7-6.2 7-11.3a7 7 0 0 0-14 0C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.7" r="2.5"/></svg>;
+    case'plus':        return<svg {...p}><path d="M12 5v14M5 12h14"/></svg>;
+    case'check':       return<svg {...p}><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>;
+    case'clock':       return<svg {...p}><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>;
+    case'bell':        return<svg {...p}><path d="M6 16.5V11a6 6 0 1 1 12 0v5.5l1.5 2H4.5l1.5-2z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>;
+    case'calendar':    return<svg {...p}><rect x="3.5" y="5" width="17" height="15" rx="2.2"/><path d="M3.5 9.5h17"/><path d="M8 3v4M16 3v4"/></svg>;
+    case'scissors':    return<svg {...p}><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 8l12 12M8 16L20 4"/></svg>;
+    case'x':           return<svg {...p}><path d="M6 6l12 12M18 6L6 18"/></svg>;
+    case'arrow-right': return<svg {...p}><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>;
+    case'arrow-left':  return<svg {...p}><path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/></svg>;
+    case'dot':         return<svg {...p}><circle cx="12" cy="12" r="2.5" fill={stroke} stroke="none"/></svg>;
+    case'refresh':     return<svg {...p}><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>;
+    case'wifi-off':    return<svg {...p}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>;
+    case'car':         return<svg {...p}><path d="M5 17h14M7 17V9l2-4h6l2 4v8"/><circle cx="8.5" cy="17" r="1.5"/><circle cx="15.5" cy="17" r="1.5"/></svg>;
+    case'search':      return<svg {...p}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>;
+    case'copy':        return<svg {...p}><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>;
+    case'user':        return<svg {...p}><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>;
+    case'chevron-down':return<svg {...p}><path d="M6 9l6 6 6-6"/></svg>;
+    default:return null;
   }
 };
 
 const Avatar=({initials,tone='#E8DFD2',size=44})=>(
-  <div style={{width:size,height:size,borderRadius:size/2,background:tone,color:'#3a382f',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:size*0.36,letterSpacing:0.3,flexShrink:0,userSelect:'none'}}>{initials}</div>
+  <div style={{width:size,height:size,borderRadius:size/2,background:tone,color:'#3a382f',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:size*0.36,flexShrink:0,userSelect:'none'}}>{initials}</div>
 );
 const Pill=({children,tone='neutral'})=>{
   const c={neutral:{bg:'rgba(140,138,131,0.12)',fg:'#5e5d58'},sage:{bg:'rgba(139,158,140,0.18)',fg:'#4f624f'},amber:{bg:'rgba(199,145,69,0.16)',fg:'#7d5419'}}[tone]||{bg:'rgba(140,138,131,0.12)',fg:'#5e5d58'};
-  return <span style={{display:'inline-flex',alignItems:'center',gap:4,background:c.bg,color:c.fg,padding:'3px 9px',borderRadius:999,fontSize:11.5,fontWeight:700,letterSpacing:0.2,textTransform:'uppercase'}}>{children}</span>;
+  return<span style={{display:'inline-flex',alignItems:'center',gap:4,background:c.bg,color:c.fg,padding:'3px 9px',borderRadius:999,fontSize:11.5,fontWeight:700,textTransform:'uppercase'}}>{children}</span>;
 };
 const Card=({children,style={},onClick})=>(
-  <div onClick={onClick} style={{background:'var(--bg-card)',border:'1px solid var(--border-soft)',borderRadius:'var(--radius-card)',boxShadow:'0 1px 0 rgba(255,255,255,0.6) inset, 0 1px 2px rgba(60,52,38,0.04)',cursor:onClick?'pointer':'default',...style}}>{children}</div>
+  <div onClick={onClick} style={{background:'var(--bg-card)',border:'1px solid var(--border-soft)',borderRadius:'var(--radius-card)',boxShadow:'0 1px 0 rgba(255,255,255,0.6) inset,0 1px 2px rgba(60,52,38,0.04)',cursor:onClick?'pointer':'default',...style}}>{children}</div>
 );
 
 const inputStyle={width:'100%',boxSizing:'border-box',padding:'12px 14px',borderRadius:'var(--radius-btn)',border:'1px solid var(--border-soft)',background:'var(--bg-page)',fontFamily:'inherit',fontSize:14.5,fontWeight:600,color:'var(--text-primary)',outline:'none'};
@@ -107,16 +134,14 @@ const Chip=({active,onClick,children})=>(
 );
 const SheetModal=({title,subtitle,onClose,children})=>(
   <div className="backdrop-in" style={{position:'fixed',inset:0,zIndex:110,background:'rgba(28,26,22,0.42)',backdropFilter:'blur(2px)',display:'flex',alignItems:'flex-end'}} onClick={onClose}>
-    <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',maxHeight:'92dvh',overflowY:'auto',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 20px max(env(safe-area-inset-bottom), 26px)'}}>
+    <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',maxHeight:'92dvh',overflowY:'auto',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 20px max(env(safe-area-inset-bottom),26px)'}}>
       <div style={{width:38,height:4,borderRadius:2,background:'var(--border)',margin:'4px auto 14px'}}/>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:16}}>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:800,fontSize:20,letterSpacing:-0.3}}>{title}</div>
           {subtitle&&<div style={{fontSize:13,color:'var(--text-muted)',marginTop:2,fontWeight:600}}>{subtitle}</div>}
         </div>
-        <button onClick={onClose} style={{width:32,height:32,borderRadius:999,background:'var(--bg-secondary)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <Icon name="x" size={16} strokeWidth={2.2}/>
-        </button>
+        <button onClick={onClose} style={{width:32,height:32,borderRadius:999,background:'var(--bg-secondary)',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name="x" size={16} strokeWidth={2.2}/></button>
       </div>
       <div style={{display:'flex',flexDirection:'column',gap:14}}>{children}</div>
     </div>
@@ -127,9 +152,7 @@ const DURATION_PRESETS=[45,60,75,90,120,180];
 const DurationPicker=({duration,setDuration,customDuration,setCustomDuration})=>(
   <Field label="Duration">
     <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-      {DURATION_PRESETS.map(m=>(
-        <Chip key={m} active={!customDuration&&duration===m} onClick={()=>{setCustomDuration(false);setDuration(m);}}>{m}m</Chip>
-      ))}
+      {DURATION_PRESETS.map(m=><Chip key={m} active={!customDuration&&duration===m} onClick={()=>{setCustomDuration(false);setDuration(m);}}>{m}m</Chip>)}
       <Chip active={customDuration} onClick={()=>setCustomDuration(true)}>Custom</Chip>
     </div>
     {customDuration&&(
@@ -137,9 +160,7 @@ const DurationPicker=({duration,setDuration,customDuration,setCustomDuration})=>
         <input type="number" min="5" max="480" step="5" value={duration} onChange={e=>setDuration(Number(e.target.value)||0)} style={{...inputStyle,flex:1}} placeholder="Minutes"/>
         <div style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:13,fontWeight:700,color:'var(--text-muted)'}}>
           <button style={stepperBtn} onClick={()=>setDuration(d=>Math.max(5,d-5))}>−</button>
-          <span style={{minWidth:56,textAlign:'center',color:'var(--text-primary)'}}>
-            {Math.floor(duration/60)>0&&`${Math.floor(duration/60)}h `}{duration%60>0&&`${duration%60}m`}{duration===0&&'0m'}
-          </span>
+          <span style={{minWidth:56,textAlign:'center',color:'var(--text-primary)'}}>{Math.floor(duration/60)>0&&`${Math.floor(duration/60)}h `}{duration%60>0&&`${duration%60}m`}{duration===0&&'0m'}</span>
           <button style={stepperBtn} onClick={()=>setDuration(d=>Math.min(480,d+5))}>+</button>
         </div>
       </div>
@@ -151,9 +172,7 @@ const ServicePicker=({selected,onToggle,catalogue})=>{
   const options=catalogue?.length?catalogue.map(s=>s.name):['Haircut & Blow Dry','Foils / Highlights','Root Colour','All Over Colour','Blow Dry','Consultation'];
   return(
     <Field label="Services">
-      <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-        {options.map(s=><Chip key={s} active={selected.includes(s)} onClick={()=>onToggle(s)}>{s}</Chip>)}
-      </div>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{options.map(s=><Chip key={s} active={selected.includes(s)} onClick={()=>onToggle(s)}>{s}</Chip>)}</div>
     </Field>
   );
 };
@@ -174,6 +193,69 @@ const DriveTimeRow=({driveTime,hasConflict})=>{
   );
 };
 
+// ══ CLIENT AUTOCOMPLETE FIELD ═════════════════════════════════
+// Shows a dropdown of up to 5 matching clients as she types.
+// Selecting one pre-fills name, phone, and address.
+const ClientAutocomplete=({name,setName,phone,setPhone,address,setAddress,directory})=>{
+  const [open,setOpen]=React.useState(false);
+  const wrapRef=React.useRef(null);
+
+  const suggestions=React.useMemo(()=>{
+    const q=name.trim().toLowerCase();
+    if(!q||q.length<2)return[];
+    return directory
+      .filter(c=>c.name.toLowerCase().includes(q)||c.phone?.includes(q))
+      .slice(0,5);
+  },[name,directory]);
+
+  // Close dropdown on outside click
+  React.useEffect(()=>{
+    const handler=e=>{if(wrapRef.current&&!wrapRef.current.contains(e.target))setOpen(false);};
+    document.addEventListener('mousedown',handler);
+    return()=>document.removeEventListener('mousedown',handler);
+  },[]);
+
+  const pick=c=>{
+    setName(c.name);
+    setPhone(c.phone);
+    setAddress(c.address||'');
+    setOpen(false);
+  };
+
+  return(
+    <div ref={wrapRef} style={{position:'relative'}}>
+      <Field label="Client name">
+        <input
+          value={name}
+          onChange={e=>{setName(e.target.value);setOpen(true);}}
+          onFocus={()=>setOpen(true)}
+          placeholder="e.g. Olivia Bennett"
+          style={inputStyle}
+          autoComplete="off"
+        />
+      </Field>
+      {open&&suggestions.length>0&&(
+        <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,zIndex:200,background:'var(--bg-card)',border:'1px solid var(--border-soft)',borderRadius:12,boxShadow:'0 8px 24px -4px rgba(20,18,14,0.18)',animation:'dropIn 160ms cubic-bezier(.2,.8,.2,1)',overflow:'hidden'}}>
+          {suggestions.map((c,i)=>(
+            <button
+              key={c.phone||c.name}
+              onMouseDown={e=>{e.preventDefault();pick(c);}}
+              style={{width:'100%',padding:'11px 14px',display:'flex',alignItems:'center',gap:10,textAlign:'left',background:i%2===0?'transparent':'rgba(244,241,235,0.5)',borderBottom:i<suggestions.length-1?'1px solid var(--border-soft)':'none'}}
+            >
+              <Avatar initials={c.initials} tone={c.avatarTone} size={34}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:800,fontSize:14,letterSpacing:-0.1}}>{c.name}</div>
+                {c.phone&&<div style={{fontSize:12,color:'var(--text-muted)',fontWeight:600,marginTop:1}}>{c.phone}</div>}
+              </div>
+              {c.address&&<div style={{fontSize:11,color:'var(--text-soft)',fontWeight:600,maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.address.split(',')[0]}</div>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ══ MONTH PICKER MODAL ════════════════════════════════════════
 const MonthPickerModal=({currentYear,currentMonth,onSelect,onClose,bookingDates,todayIso})=>{
   const td=parseLocalDate(todayIso);
@@ -182,13 +264,13 @@ const MonthPickerModal=({currentYear,currentMonth,onSelect,onClose,bookingDates,
   for(let i=0;i<13;i++){const d=new Date(minY,minM+i,1);months.push({year:d.getFullYear(),month:d.getMonth()});}
   return(
     <div className="backdrop-in" style={{position:'fixed',inset:0,zIndex:130,background:'rgba(28,26,22,0.52)',backdropFilter:'blur(3px)',display:'flex',alignItems:'flex-end'}} onClick={onClose}>
-      <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 20px max(env(safe-area-inset-bottom), 28px)'}}>
+      <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 20px max(env(safe-area-inset-bottom),28px)'}}>
         <div style={{width:38,height:4,borderRadius:2,background:'var(--border)',margin:'4px auto 16px'}}/>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
           <div style={{fontWeight:800,fontSize:18,letterSpacing:-0.3}}>Jump to month</div>
           <button onClick={onClose} style={{width:32,height:32,borderRadius:999,background:'var(--bg-secondary)',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name="x" size={16} strokeWidth={2.2}/></button>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3, 1fr)',gap:8,paddingBottom:4}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,paddingBottom:4}}>
           {months.map(({year,month})=>{
             const isActive=year===currentYear&&month===currentMonth;
             const isToday=year===minY&&month===minM;
@@ -243,11 +325,9 @@ const CalendarSection=({days,selected,onSelect,bookingDates,todayIso,viewYear,vi
           <Icon name="arrow-right" size={15} strokeWidth={2.2}/>
         </button>
       </div>
-
       <div ref={scrollRef} className="no-scrollbar" style={{display:'flex',gap:8,overflowX:'auto',overflowY:'hidden',padding:'0 22px 4px'}}>
         {monthDays.map(d=>{
-          const iso=isoLocal(d),isSel=iso===selected,isToday=iso===todayIso;
-          const hasBookings=bookingDates.includes(iso);
+          const iso=isoLocal(d),isSel=iso===selected,isToday=iso===todayIso,hasBookings=bookingDates.includes(iso);
           return(
             <button key={iso} data-selected={isSel} onClick={()=>onSelect(iso)}
               style={{flexShrink:0,width:46,height:62,borderRadius:999,background:isSel?'var(--primary)':'var(--bg-card)',border:'1px solid '+(isSel?'transparent':isToday?'var(--primary-deep)':'var(--border-soft)'),color:isSel?'#fff':'var(--text-primary)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'6px 0',position:'relative'}}>
@@ -259,12 +339,7 @@ const CalendarSection=({days,selected,onSelect,bookingDates,todayIso,viewYear,vi
           );
         })}
       </div>
-
-      {showMonthPicker&&(
-        <MonthPickerModal currentYear={viewYear} currentMonth={viewMonth}
-          onSelect={(y,m)=>onMonthChange(y,m)} onClose={()=>setShowMonthPicker(false)}
-          bookingDates={bookingDates} todayIso={todayIso}/>
-      )}
+      {showMonthPicker&&<MonthPickerModal currentYear={viewYear} currentMonth={viewMonth} onSelect={(y,m)=>onMonthChange(y,m)} onClose={()=>setShowMonthPicker(false)} bookingDates={bookingDates} todayIso={todayIso}/>}
     </>
   );
 };
@@ -281,18 +356,9 @@ const BookingCard=({booking,onOpen})=>{
             <div style={{fontWeight:800,fontSize:17,letterSpacing:-0.2,textDecoration:isCompleted?'line-through':'none'}}>{booking.client}</div>
             <div style={{fontWeight:800,fontSize:16,whiteSpace:'nowrap'}}>${booking.price}</div>
           </div>
-          <div style={{marginTop:5,fontSize:14.5,fontWeight:700,display:'flex',alignItems:'center',gap:6}}>
-            <Icon name="clock" size={14} strokeWidth={1.9} stroke="var(--text-muted)"/>
-            <span>{booking.time} – {booking.timeEnd}</span>
-          </div>
-          <div style={{marginTop:5,fontSize:14,fontWeight:600,display:'flex',alignItems:'flex-start',gap:6}}>
-            <Icon name="scissors" size={13.5} strokeWidth={1.9} stroke="var(--text-muted)"/>
-            <span style={{flex:1,lineHeight:1.4}}>{booking.services.join(', ')}</span>
-          </div>
-          <div style={{marginTop:5,fontSize:13.5,color:'var(--text-muted)',fontWeight:600,display:'flex',alignItems:'flex-start',gap:6}}>
-            <Icon name="pin" size={13.5} strokeWidth={1.9}/>
-            <span style={{flex:1,lineHeight:1.4}}>{booking.address}</span>
-          </div>
+          <div style={{marginTop:5,fontSize:14.5,fontWeight:700,display:'flex',alignItems:'center',gap:6}}><Icon name="clock" size={14} strokeWidth={1.9} stroke="var(--text-muted)"/><span>{booking.time} – {booking.timeEnd}</span></div>
+          <div style={{marginTop:5,fontSize:14,fontWeight:600,display:'flex',alignItems:'flex-start',gap:6}}><Icon name="scissors" size={13.5} strokeWidth={1.9} stroke="var(--text-muted)"/><span style={{flex:1,lineHeight:1.4}}>{booking.services.join(', ')}</span></div>
+          <div style={{marginTop:5,fontSize:13.5,color:'var(--text-muted)',fontWeight:600,display:'flex',alignItems:'flex-start',gap:6}}><Icon name="pin" size={13.5} strokeWidth={1.9}/><span style={{flex:1,lineHeight:1.4}}>{booking.address}</span></div>
         </div>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',borderTop:'1px solid var(--border-soft)'}}>
@@ -307,7 +373,7 @@ const BookingCard=({booking,onOpen})=>{
 };
 
 const DetailRow=({icon,label,children,last})=>(
-  <div style={{display:'flex',alignItems:'flex-start',gap:12,padding:'14px 14px',borderBottom:last?'none':'1px solid var(--border-soft)'}}>
+  <div style={{display:'flex',alignItems:'flex-start',gap:12,padding:'14px',borderBottom:last?'none':'1px solid var(--border-soft)'}}>
     <div style={{width:32,height:32,borderRadius:8,background:'var(--bg-secondary)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><Icon name={icon} size={15} strokeWidth={1.8}/></div>
     <div style={{flex:1,minWidth:0}}>
       <div style={{fontSize:11.5,fontWeight:700,color:'var(--text-muted)',letterSpacing:0.5,textTransform:'uppercase',marginBottom:3}}>{label}</div>
@@ -316,7 +382,7 @@ const DetailRow=({icon,label,children,last})=>(
   </div>
 );
 function shortAddress(addr){return(addr||'').split(',')[0].trim();}
-function hasNotes(b){return !!(b.notes||b.hairDescription||b.colourHistory||b.mobilityNeeds||b.extraNotes);}
+function hasNotes(b){return!!(b.notes||b.hairDescription||b.colourHistory||b.mobilityNeeds||b.extraNotes);}
 const ActionTile=({icon,label,onClick,primary})=>(
   <button onClick={onClick} style={{padding:'14px 8px',background:primary?'var(--primary)':'var(--bg-secondary)',color:primary?'#fff':'var(--text-primary)',border:'1px solid '+(primary?'transparent':'var(--border-soft)'),borderRadius:'var(--radius-btn)',display:'flex',flexDirection:'column',alignItems:'center',gap:4,fontWeight:700,fontSize:13}}>
     <Icon name={icon} size={18} strokeWidth={1.9}/>{label}
@@ -325,19 +391,19 @@ const ActionTile=({icon,label,onClick,primary})=>(
 
 // ══ BOOKING DETAIL MODAL ══════════════════════════════════════
 const BookingDetailModal=({booking,onClose,onRefresh,onCopy,serviceCatalogue})=>{
-  const [confirmed,setConfirmed]=React.useState(booking.status==='confirmed');
-  const [completed,setCompleted]=React.useState(booking.status==='completed');
-  const [working,setWorking]=React.useState(false);
-  const [showEdit,setShowEdit]=React.useState(false);
-  const [editPhone,setEditPhone]=React.useState(booking.phone||'');
-  const [editAddress,setEditAddress]=React.useState(booking.address||'');
-  const [editDate,setEditDate]=React.useState(booking.date||'');
-  const [editTime,setEditTime]=React.useState(booking.time||'');
-  const [editPrice,setEditPrice]=React.useState(booking.price||'');
-  const [editNotes,setEditNotes]=React.useState(booking.notes||'');
-  const [editServices,setEditServices]=React.useState(booking.services||[]);
-  const [editDuration,setEditDuration]=React.useState(booking.duration||60);
-  const [editCustomDur,setEditCustomDur]=React.useState(!DURATION_PRESETS.includes(booking.duration));
+  const[confirmed,setConfirmed]=React.useState(booking.status==='confirmed');
+  const[completed,setCompleted]=React.useState(booking.status==='completed');
+  const[working,setWorking]=React.useState(false);
+  const[showEdit,setShowEdit]=React.useState(false);
+  const[editPhone,setEditPhone]=React.useState(booking.phone||'');
+  const[editAddress,setEditAddress]=React.useState(booking.address||'');
+  const[editDate,setEditDate]=React.useState(booking.date||'');
+  const[editTime,setEditTime]=React.useState(booking.time||'');
+  const[editPrice,setEditPrice]=React.useState(booking.price||'');
+  const[editNotes,setEditNotes]=React.useState(booking.notes||'');
+  const[editServices,setEditServices]=React.useState(booking.services||[]);
+  const[editDuration,setEditDuration]=React.useState(booking.duration||60);
+  const[editCustomDur,setEditCustomDur]=React.useState(!DURATION_PRESETS.includes(booking.duration));
   const toggleService=s=>setEditServices(prev=>prev.includes(s)?prev.filter(x=>x!==s):[...prev,s]);
 
   const handleConfirm=async()=>{setWorking(true);try{const res=await fetch(`${API_URL}/bookings/${booking.id}/confirm`,{method:'POST'});if(res.ok){setConfirmed(true);onRefresh?.();}}catch(e){console.error(e);}setWorking(false);};
@@ -348,7 +414,7 @@ const BookingDetailModal=({booking,onClose,onRefresh,onCopy,serviceCatalogue})=>
   const noteText=[booking.notes,booking.hairDescription,booking.colourHistory,booking.mobilityNeeds,booking.extraNotes].filter(Boolean).join(' · ');
   return(
     <div className="backdrop-in" style={{position:'fixed',inset:0,zIndex:100,background:'rgba(28,26,22,0.42)',backdropFilter:'blur(2px)',display:'flex',alignItems:'flex-end'}} onClick={onClose}>
-      <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',maxHeight:'90dvh',overflowY:'auto',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 18px max(env(safe-area-inset-bottom), 24px)'}}>
+      <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',maxHeight:'90dvh',overflowY:'auto',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 18px max(env(safe-area-inset-bottom),24px)'}}>
         <div style={{width:38,height:4,borderRadius:2,background:'var(--border)',margin:'4px auto 14px'}}/>
         <div style={{display:'flex',alignItems:'flex-start',gap:14,marginBottom:16}}>
           <Avatar initials={booking.initials} tone={booking.avatarTone} size={56}/>
@@ -365,9 +431,7 @@ const BookingDetailModal=({booking,onClose,onRefresh,onCopy,serviceCatalogue})=>
           <ActionTile icon="pin" label="Navigate" primary onClick={()=>window.open(`https://maps.google.com/?q=${encodeURIComponent(booking.address)}`,'_blank')}/>
         </div>
         <button onClick={()=>window.open(`https://maps.google.com/?q=${encodeURIComponent(booking.address)}`,'_blank')} style={{width:'100%',height:132,borderRadius:14,background:'linear-gradient(135deg,#E6E2D8 0%,#DBD6C9 100%)',border:'1px solid var(--border-soft)',marginBottom:14,position:'relative',overflow:'hidden',cursor:'pointer'}}>
-          <svg width="100%" height="100%" viewBox="0 0 360 132" preserveAspectRatio="none" style={{position:'absolute',inset:0,opacity:0.55}}>
-            <path d="M-10 30 Q120 60 200 28 T380 50" stroke="#C9C2B0" strokeWidth="6" fill="none" strokeLinecap="round"/><path d="M-10 90 Q90 70 180 105 T380 88" stroke="#C9C2B0" strokeWidth="4" fill="none" strokeLinecap="round"/><path d="M70 -10 Q90 60 60 132" stroke="#D6D0BF" strokeWidth="3" fill="none" strokeLinecap="round"/><path d="M240 -10 Q260 70 230 132" stroke="#D6D0BF" strokeWidth="3" fill="none" strokeLinecap="round"/><rect x="20" y="50" width="50" height="30" fill="#D6D0BF" opacity="0.7" rx="3"/><rect x="270" y="60" width="60" height="40" fill="#D6D0BF" opacity="0.7" rx="3"/><rect x="160" y="20" width="40" height="22" fill="#D6D0BF" opacity="0.7" rx="3"/>
-          </svg>
+          <svg width="100%" height="100%" viewBox="0 0 360 132" preserveAspectRatio="none" style={{position:'absolute',inset:0,opacity:0.55}}><path d="M-10 30 Q120 60 200 28 T380 50" stroke="#C9C2B0" strokeWidth="6" fill="none" strokeLinecap="round"/><path d="M-10 90 Q90 70 180 105 T380 88" stroke="#C9C2B0" strokeWidth="4" fill="none" strokeLinecap="round"/><path d="M70 -10 Q90 60 60 132" stroke="#D6D0BF" strokeWidth="3" fill="none" strokeLinecap="round"/><path d="M240 -10 Q260 70 230 132" stroke="#D6D0BF" strokeWidth="3" fill="none" strokeLinecap="round"/><rect x="20" y="50" width="50" height="30" fill="#D6D0BF" opacity="0.7" rx="3"/><rect x="270" y="60" width="60" height="40" fill="#D6D0BF" opacity="0.7" rx="3"/><rect x="160" y="20" width="40" height="22" fill="#D6D0BF" opacity="0.7" rx="3"/></svg>
           <div style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-100%)',display:'flex',flexDirection:'column',alignItems:'center'}}>
             <div style={{padding:'5px 10px',background:'var(--primary)',color:'#fff',fontSize:11,fontWeight:800,borderRadius:999,boxShadow:'0 4px 10px -2px rgba(111,132,114,0.5)',whiteSpace:'nowrap',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis'}}>{shortAddress(booking.address)}</div>
             <div style={{width:0,height:0,borderLeft:'6px solid transparent',borderRight:'6px solid transparent',borderTop:'8px solid var(--primary)'}}/>
@@ -385,20 +449,16 @@ const BookingDetailModal=({booking,onClose,onRefresh,onCopy,serviceCatalogue})=>
           {hasNotes(booking)&&<DetailRow icon="user" label="Client notes" last><div style={{fontSize:14.5,lineHeight:1.45,fontWeight:600}}>{noteText}</div></DetailRow>}
         </Card>
         <div style={{display:'flex',gap:8,marginBottom:10}}>
-          {completed?(
-            <div style={{flex:1,padding:'14px 18px',borderRadius:'var(--radius-btn)',background:'var(--bg-secondary)',border:'1px solid var(--border-soft)',color:'var(--text-muted)',fontWeight:700,fontSize:15,display:'inline-flex',alignItems:'center',justifyContent:'center',gap:8}}><Icon name="check" size={16} strokeWidth={2.2} stroke="var(--text-muted)"/>Completed</div>
-          ):!confirmed?(
-            <button onClick={handleConfirm} disabled={working} style={{flex:1,padding:'14px 18px',borderRadius:'var(--radius-btn)',background:'var(--primary)',color:'#fff',fontWeight:700,fontSize:15,border:'none',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:8,opacity:working?0.7:1}}><Icon name="check" size={16} strokeWidth={2.2} stroke="#fff"/>{working?'Confirming…':'Confirm booking'}</button>
-          ):(
-            <button onClick={handleComplete} disabled={working} style={{flex:1,padding:'14px 18px',borderRadius:'var(--radius-btn)',background:'#6F8472',color:'#fff',fontWeight:700,fontSize:15,border:'none',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:8,opacity:working?0.7:1}}><Icon name="check" size={16} strokeWidth={2.2} stroke="#fff"/>{working?'Saving…':'Mark complete'}</button>
-          )}
+          {completed?(<div style={{flex:1,padding:'14px 18px',borderRadius:'var(--radius-btn)',background:'var(--bg-secondary)',border:'1px solid var(--border-soft)',color:'var(--text-muted)',fontWeight:700,fontSize:15,display:'inline-flex',alignItems:'center',justifyContent:'center',gap:8}}><Icon name="check" size={16} strokeWidth={2.2} stroke="var(--text-muted)"/>Completed</div>)
+          :!confirmed?(<button onClick={handleConfirm} disabled={working} style={{flex:1,padding:'14px 18px',borderRadius:'var(--radius-btn)',background:'var(--primary)',color:'#fff',fontWeight:700,fontSize:15,border:'none',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:8,opacity:working?0.7:1}}><Icon name="check" size={16} strokeWidth={2.2} stroke="#fff"/>{working?'Confirming…':'Confirm booking'}</button>)
+          :(<button onClick={handleComplete} disabled={working} style={{flex:1,padding:'14px 18px',borderRadius:'var(--radius-btn)',background:'#6F8472',color:'#fff',fontWeight:700,fontSize:15,border:'none',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:8,opacity:working?0.7:1}}><Icon name="check" size={16} strokeWidth={2.2} stroke="#fff"/>{working?'Saving…':'Mark complete'}</button>)}
           {!completed&&<button onClick={()=>setShowEdit(true)} disabled={working} style={{padding:'14px 16px',borderRadius:'var(--radius-btn)',background:'var(--bg-secondary)',border:'1px solid var(--border-soft)',color:'var(--text-primary)',fontWeight:800,fontSize:14}}>Edit</button>}
           {!completed&&<button onClick={handleCancel} disabled={working} style={{padding:'14px 16px',borderRadius:'var(--radius-btn)',background:'transparent',border:'1.5px solid #B36B6B',color:'#B36B6B',fontWeight:800,fontSize:14,opacity:working?0.5:1}}>Cancel</button>}
         </div>
         <button onClick={()=>{onClose();onCopy(booking);}} style={{width:'100%',padding:'12px 16px',borderRadius:'var(--radius-btn)',background:'var(--bg-secondary)',border:'1px solid var(--border-soft)',color:'var(--text-primary)',fontWeight:700,fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}><Icon name="copy" size={15} strokeWidth={1.9}/>Repeat / copy this appointment</button>
         {showEdit&&(
           <div className="backdrop-in" style={{position:'fixed',inset:0,zIndex:120,background:'rgba(28,26,22,0.42)',backdropFilter:'blur(2px)',display:'flex',alignItems:'flex-end'}} onClick={()=>setShowEdit(false)}>
-            <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',maxHeight:'92dvh',overflowY:'auto',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 20px max(env(safe-area-inset-bottom), 26px)'}}>
+            <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',maxHeight:'92dvh',overflowY:'auto',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 20px max(env(safe-area-inset-bottom),26px)'}}>
               <div style={{width:38,height:4,borderRadius:2,background:'var(--border)',margin:'4px auto 14px'}}/>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
                 <div style={{fontWeight:800,fontSize:20,letterSpacing:-0.3}}>Edit booking</div>
@@ -429,30 +489,29 @@ const BookingDetailModal=({booking,onClose,onRefresh,onCopy,serviceCatalogue})=>
 };
 
 // ══ NEW BOOKING MODAL ═════════════════════════════════════════
-const NewBookingModal=({onClose,serviceCatalogue,prefill})=>{
+const NewBookingModal=({onClose,serviceCatalogue,prefill,directory})=>{
   const today=getAdelaideToday(),isCopy=!!prefill;
-  const [client,setClient]=React.useState(prefill?.client||'');
-  const [phone,setPhone]=React.useState(prefill?.phone||'');
-  const [services,setServices]=React.useState(prefill?.services||[]);
-  const [date,setDate]=React.useState(today);
-  const [time,setTime]=React.useState(prefill?.time||'10:00');
-  const [duration,setDuration]=React.useState(prefill?.duration||75);
-  const [customDur,setCustomDur]=React.useState(!DURATION_PRESETS.includes(prefill?.duration||75));
-  const [address,setAddress]=React.useState(prefill?.address||'');
-  const [saving,setSaving]=React.useState(false);
+  const[client,setClient]=React.useState(prefill?.client||'');
+  const[phone,setPhone]=React.useState(prefill?.phone||'');
+  const[services,setServices]=React.useState(prefill?.services||[]);
+  const[date,setDate]=React.useState(today);
+  const[time,setTime]=React.useState(prefill?.time||'10:00');
+  const[duration,setDuration]=React.useState(prefill?.duration||75);
+  const[customDur,setCustomDur]=React.useState(!DURATION_PRESETS.includes(prefill?.duration||75));
+  const[address,setAddress]=React.useState(prefill?.address||'');
+  const[saving,setSaving]=React.useState(false);
   const toggleService=s=>setServices(prev=>prev.includes(s)?prev.filter(x=>x!==s):[...prev,s]);
 
-  // Conflict check — applies to new bookings AND rebooks
   const clashes=React.useMemo(()=>{
     const all=window.__allBookings||[];
     if(!date||!time||!duration)return[];
-    const [h,m]=time.split(':').map(Number);
+    const[h,m]=time.split(':').map(Number);
     const newStart=h*60+m,newEnd=newStart+duration;
     return all.filter(b=>{
       if(b.date!==date)return false;
       if(b.status==='completed'||b.status==='cancelled')return false;
       if(isCopy&&b.id===prefill?.id)return false;
-      const [bh,bm]=b.time.split(':').map(Number);
+      const[bh,bm]=b.time.split(':').map(Number);
       const bStart=bh*60+bm,bEnd=bStart+(b.duration||60);
       return newStart<bEnd&&newEnd>bStart;
     });
@@ -464,7 +523,7 @@ const NewBookingModal=({onClose,serviceCatalogue,prefill})=>{
     setSaving(true);
     try{
       const serviceIds=(serviceCatalogue||[]).filter(s=>services.includes(s.name)).map(s=>s.id);
-      const [h,m]=time.split(':').map(Number);
+      const[h,m]=time.split(':').map(Number);
       const start=parseLocalDate(date);start.setHours(h,m,0,0);
       const res=await fetch(`${API_URL}/bookings/create`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({services:serviceIds,client:{name:client.trim(),phone:phone.trim()},startTime:start.toISOString(),duration,customFields:[{id:'Tsg5TJ2XhBD523zVvenw',values:[address.trim()]}]})});
       if(!res.ok)throw new Error(`HTTP ${res.status}`);
@@ -475,7 +534,17 @@ const NewBookingModal=({onClose,serviceCatalogue,prefill})=>{
 
   return(
     <SheetModal title={isCopy?'Repeat appointment':'New booking'} subtitle={isCopy?`Copying ${prefill.client}'s booking`:undefined} onClose={()=>onClose()}>
-      <Field label="Client name"><input value={client} onChange={e=>setClient(e.target.value)} placeholder="e.g. Olivia Bennett" style={inputStyle}/></Field>
+      {/* Client autocomplete — only for new bookings, not copies */}
+      {!isCopy?(
+        <ClientAutocomplete
+          name={client} setName={setClient}
+          phone={phone} setPhone={setPhone}
+          address={address} setAddress={setAddress}
+          directory={directory}
+        />
+      ):(
+        <Field label="Client name"><input value={client} onChange={e=>setClient(e.target.value)} style={inputStyle}/></Field>
+      )}
       <Field label="Phone"><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+61 4xx xxx xxx" type="tel" style={inputStyle}/></Field>
       <ServicePicker selected={services} onToggle={toggleService} catalogue={serviceCatalogue}/>
       <div style={{display:'grid',gridTemplateColumns:'1.2fr 1fr',gap:10}}>
@@ -501,10 +570,10 @@ const NewBookingModal=({onClose,serviceCatalogue,prefill})=>{
 // ══ BLOCK TIME MODAL ══════════════════════════════════════════
 const BlockTimeModal=({onClose})=>{
   const today=getAdelaideToday();
-  const [date,setDate]=React.useState(today);
-  const [start,setStart]=React.useState('12:00');
-  const [end,setEnd]=React.useState('14:00');
-  const [reason,setReason]=React.useState('Lunch break');
+  const[date,setDate]=React.useState(today);
+  const[start,setStart]=React.useState('12:00');
+  const[end,setEnd]=React.useState('14:00');
+  const[reason,setReason]=React.useState('Lunch break');
   const presets=['Lunch break','Personal','Travel time','Day off'];
   const handleSave=async()=>{try{await fetch(`${API_URL}/block`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,start,end,reason})});}catch(e){console.error(e);}onClose();};
   return(
@@ -527,18 +596,36 @@ const BlockTimeModal=({onClose})=>{
   );
 };
 
-// ══ SEARCH PANEL ══════════════════════════════════════════════
-const SearchPanel=({bookings,onSelectBooking,onClose})=>{
-  const [query,setQuery]=React.useState('');
+// ══ SEARCH PANEL — now searches client directory ══════════════
+const SearchPanel=({bookings,directory,onSelectBooking,onOpenNewBooking,onClose})=>{
+  const[query,setQuery]=React.useState('');
   const inputRef=React.useRef(null);
   React.useEffect(()=>{setTimeout(()=>inputRef.current?.focus(),100);},[]);
-  const results=React.useMemo(()=>{
-    const q=query.toLowerCase().trim();if(!q)return[];
-    return bookings.filter(b=>b.client?.toLowerCase().includes(q)||b.phone?.replace(/\s/g,'').includes(q.replace(/\s/g,''))||b.address?.toLowerCase().includes(q)).slice(0,20);
-  },[query,bookings]);
+
+  // Search both bookings (for navigating to a specific appointment)
+  // and directory (for finding a client and pre-filling new booking)
+  const{bookingResults,clientResults}=React.useMemo(()=>{
+    const q=query.toLowerCase().trim();
+    if(!q)return{bookingResults:[],clientResults:[]};
+    const bookingResults=bookings.filter(b=>
+      b.client?.toLowerCase().includes(q)||
+      cleanPhone(b.phone).includes(q.replace(/\s/g,''))||
+      b.address?.toLowerCase().includes(q)
+    ).slice(0,8);
+    // Client directory results — deduplicated by name match
+    const seenNames=new Set(bookingResults.map(b=>b.client?.toLowerCase()));
+    const clientResults=directory.filter(c=>
+      (c.name.toLowerCase().includes(q)||cleanPhone(c.phone).includes(q.replace(/\s/g,'')))
+      &&!seenNames.has(c.name.toLowerCase())
+    ).slice(0,5);
+    return{bookingResults,clientResults};
+  },[query,bookings,directory]);
+
+  const hasResults=bookingResults.length>0||clientResults.length>0;
+
   return(
     <div className="backdrop-in" style={{position:'fixed',inset:0,zIndex:100,background:'rgba(28,26,22,0.42)',backdropFilter:'blur(2px)',display:'flex',alignItems:'flex-end'}} onClick={onClose}>
-      <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',maxHeight:'85dvh',display:'flex',flexDirection:'column',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 20px max(env(safe-area-inset-bottom), 20px)'}}>
+      <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',maxHeight:'85dvh',display:'flex',flexDirection:'column',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 20px max(env(safe-area-inset-bottom),20px)'}}>
         <div style={{width:38,height:4,borderRadius:2,background:'var(--border)',margin:'4px auto 14px'}}/>
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
           <div style={{flex:1,display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:'var(--radius-btn)',border:'1px solid var(--border-soft)',background:'var(--bg-page)'}}>
@@ -548,26 +635,61 @@ const SearchPanel=({bookings,onSelectBooking,onClose})=>{
           </div>
           <button onClick={onClose} style={{fontWeight:700,fontSize:14,color:'var(--text-muted)',padding:'8px 4px'}}>Cancel</button>
         </div>
+
         <div className="no-scrollbar" style={{flex:1,overflowY:'auto'}}>
           {query.trim()===''?(
-            <div style={{padding:'30px 0',textAlign:'center',color:'var(--text-muted)'}}><Icon name="search" size={28} strokeWidth={1.5} stroke="var(--text-soft)"/><div style={{marginTop:10,fontSize:14,fontWeight:600}}>Search by name, phone or address</div></div>
-          ):results.length===0?(
-            <div style={{padding:'30px 0',textAlign:'center',color:'var(--text-muted)'}}><div style={{fontSize:14,fontWeight:700}}>No matches</div><div style={{fontSize:13,marginTop:4,fontWeight:600}}>Try a different name or number</div></div>
+            <div style={{padding:'30px 0',textAlign:'center',color:'var(--text-muted)'}}>
+              <Icon name="search" size={28} strokeWidth={1.5} stroke="var(--text-soft)"/>
+              <div style={{marginTop:10,fontSize:14,fontWeight:600}}>Search by name, phone or address</div>
+            </div>
+          ):!hasResults?(
+            <div style={{padding:'30px 0',textAlign:'center',color:'var(--text-muted)'}}>
+              <div style={{fontSize:14,fontWeight:700}}>No matches</div>
+              <div style={{fontSize:13,marginTop:4,fontWeight:600}}>Try a different name or number</div>
+            </div>
           ):(
-            <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              {results.map(b=>(
-                <button key={b.id} onClick={()=>{onSelectBooking(b);onClose();}} style={{padding:0,background:'var(--bg-secondary)',border:'1px solid var(--border-soft)',borderRadius:14,textAlign:'left',cursor:'pointer'}}>
-                  <div style={{padding:'14px 16px',display:'flex',gap:12,alignItems:'center'}}>
-                    <Avatar initials={b.initials} tone={b.avatarTone} size={42}/>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontWeight:800,fontSize:15.5,letterSpacing:-0.2}}>{b.client}</div>
-                      <div style={{fontSize:13,color:'var(--text-muted)',marginTop:2,fontWeight:600}}>{b.services.join(', ')} · {parseLocalDate(b.date).toLocaleDateString('en-AU',{day:'numeric',month:'short'})} · {b.time}</div>
-                      {b.phone&&<div style={{fontSize:12.5,color:'var(--text-soft)',marginTop:1,fontWeight:600}}>{b.phone}</div>}
-                    </div>
-                    <Icon name="arrow-right" size={16} strokeWidth={2} stroke="var(--text-muted)"/>
-                  </div>
-                </button>
-              ))}
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              {/* Booking results — tap to navigate to that appointment */}
+              {bookingResults.length>0&&(
+                <>
+                  <div style={{fontSize:10.5,fontWeight:800,letterSpacing:0.6,color:'var(--text-muted)',textTransform:'uppercase',padding:'2px 4px 6px'}}>Appointments</div>
+                  {bookingResults.map(b=>(
+                    <button key={b.id} onClick={()=>{onSelectBooking(b);onClose();}} style={{padding:0,background:'var(--bg-secondary)',border:'1px solid var(--border-soft)',borderRadius:14,textAlign:'left'}}>
+                      <div style={{padding:'12px 14px',display:'flex',gap:12,alignItems:'center'}}>
+                        <Avatar initials={b.initials} tone={b.avatarTone} size={40}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.1}}>{b.client}</div>
+                          <div style={{fontSize:12.5,color:'var(--text-muted)',marginTop:2,fontWeight:600}}>{b.services.join(', ')} · {parseLocalDate(b.date).toLocaleDateString('en-AU',{day:'numeric',month:'short'})} · {b.time}</div>
+                          {b.phone&&<div style={{fontSize:12,color:'var(--text-soft)',marginTop:1,fontWeight:600}}>{b.phone}</div>}
+                        </div>
+                        <Icon name="arrow-right" size={15} strokeWidth={2} stroke="var(--text-muted)"/>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* Client directory results — tap to open new booking pre-filled */}
+              {clientResults.length>0&&(
+                <>
+                  <div style={{fontSize:10.5,fontWeight:800,letterSpacing:0.6,color:'var(--text-muted)',textTransform:'uppercase',padding:'8px 4px 6px'}}>Clients — tap to book</div>
+                  {clientResults.map(c=>(
+                    <button key={c.phone||c.name} onClick={()=>{onOpenNewBooking(c);onClose();}} style={{padding:0,background:'var(--bg-secondary)',border:'1px solid var(--border-soft)',borderRadius:14,textAlign:'left'}}>
+                      <div style={{padding:'12px 14px',display:'flex',gap:12,alignItems:'center'}}>
+                        <Avatar initials={c.initials} tone={c.avatarTone} size={40}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.1}}>{c.name}</div>
+                          {c.phone&&<div style={{fontSize:12.5,color:'var(--text-muted)',marginTop:2,fontWeight:600}}>{c.phone}</div>}
+                          {c.address&&<div style={{fontSize:12,color:'var(--text-soft)',marginTop:1,fontWeight:600}}>{c.address.split(',')[0]}</div>}
+                        </div>
+                        <div style={{display:'flex',alignItems:'center',gap:4,padding:'5px 10px',borderRadius:999,background:'var(--primary-soft)',color:'var(--primary-deep)',fontSize:12,fontWeight:800}}>
+                          <Icon name="plus" size={12} strokeWidth={2.4}/>Book
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -579,15 +701,15 @@ const SearchPanel=({bookings,onSelectBooking,onClose})=>{
 // ══ FAB ═══════════════════════════════════════════════════════
 const FabAction=({icon,label,onClick})=>(
   <button onClick={onClick} style={{display:'inline-flex',alignItems:'center',gap:10,padding:'12px 16px 12px 14px',borderRadius:999,background:'var(--bg-card)',border:'1px solid var(--border-soft)',color:'var(--text-primary)',fontWeight:800,fontSize:14,boxShadow:'0 10px 24px -8px rgba(20,18,14,0.25)',animation:'fabIn 240ms cubic-bezier(.2,.8,.2,1) both'}}>
-    <div style={{width:30,height:30,borderRadius:999,background:'var(--primary-soft)',color:'var(--primary-deep)',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name={icon} size={15} strokeWidth={1.9}/></div>{label}
-  </button>
+  <div style={{width:30,height:30,borderRadius:999,background:'var(--primary-soft)',color:'var(--primary-deep)',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name={icon} size={15} strokeWidth={1.9}/></div>{label}
+</button>
 );
 const ExpandFAB=({open,setOpen,onPick})=>(
   <>
     {open&&<div className="backdrop-in" onClick={()=>setOpen(false)} style={{position:'fixed',inset:0,zIndex:80,background:'rgba(28,26,22,0.42)',backdropFilter:'blur(2px)'}}/>}
-    <div style={{position:'fixed',right:22,bottom:'max(env(safe-area-inset-bottom), 80px)',zIndex:90,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:12}}>
+    <div style={{position:'fixed',right:22,bottom:'max(env(safe-area-inset-bottom),80px)',zIndex:90,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:12}}>
       {open&&<><FabAction icon="calendar" label="New booking" onClick={()=>onPick('new')}/><FabAction icon="clock" label="Block time" onClick={()=>onPick('block')}/></>}
-      <button onClick={()=>setOpen(o=>!o)} style={{width:56,height:56,borderRadius:999,background:'#1A1A18',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 14px 28px -10px rgba(20,18,14,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset',transition:'transform 220ms cubic-bezier(.2,.8,.2,1)',transform:open?'rotate(45deg)':'rotate(0deg)'}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{width:56,height:56,borderRadius:999,background:'#1A1A18',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 14px 28px -10px rgba(20,18,14,0.5),0 0 0 1px rgba(255,255,255,0.04) inset',transition:'transform 220ms cubic-bezier(.2,.8,.2,1)',transform:open?'rotate(45deg)':'rotate(0deg)'}}>
         <Icon name="plus" size={22} strokeWidth={2.4}/>
       </button>
     </div>
@@ -598,7 +720,7 @@ const EarningsStrip=({dayBookings,allBookings})=>{
   const todayTotal=dayBookings.reduce((s,b)=>s+(b.price||0),0);
   const periodTotal=allBookings.reduce((s,b)=>s+(b.price||0),0);
   return(
-    <div style={{position:'fixed',bottom:0,left:0,right:0,zIndex:40,background:'var(--bg-card)',borderTop:'1px solid var(--border-soft)',padding:'10px 22px max(env(safe-area-inset-bottom), 10px)',display:'flex',justifyContent:'space-around',maxWidth:480,margin:'0 auto'}}>
+    <div style={{position:'fixed',bottom:0,left:0,right:0,zIndex:40,background:'var(--bg-card)',borderTop:'1px solid var(--border-soft)',padding:'10px 22px max(env(safe-area-inset-bottom),10px)',display:'flex',justifyContent:'space-around',maxWidth:480,margin:'0 auto'}}>
       <div style={{textAlign:'center'}}><div style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5}}>Today</div><div style={{fontSize:18,fontWeight:800}}>${todayTotal}</div></div>
       <div style={{width:1,background:'var(--border-soft)'}}/>
       <div style={{textAlign:'center'}}><div style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5}}>This period</div><div style={{fontSize:18,fontWeight:800}}>${periodTotal}</div></div>
@@ -610,19 +732,22 @@ const EarningsStrip=({dayBookings,allBookings})=>{
 const App=()=>{
   const todayIso=getAdelaideToday();
   const todayDate=parseLocalDate(todayIso);
-  const [bookings,setBookings]=React.useState([]);
-  const [services,setServices]=React.useState([]);
-  const [loading,setLoading]=React.useState(true);
-  const [error,setError]=React.useState(null);
-  const [selected,setSelected]=React.useState(todayIso);
-  const [activeBooking,setActiveBooking]=React.useState(null);
-  const [fabOpen,setFabOpen]=React.useState(false);
-  const [fabModal,setFabModal]=React.useState(null);
-  const [copyPrefill,setCopyPrefill]=React.useState(null);
-  const [showNotifications,setShowNotifications]=React.useState(false);
-  const [showSearch,setShowSearch]=React.useState(false);
-  const [viewYear,setViewYear]=React.useState(todayDate.getFullYear());
-  const [viewMonth,setViewMonth]=React.useState(todayDate.getMonth());
+  const[bookings,setBookings]=React.useState([]);
+  const[services,setServices]=React.useState([]);
+  const[loading,setLoading]=React.useState(true);
+  const[error,setError]=React.useState(null);
+  const[selected,setSelected]=React.useState(todayIso);
+  const[activeBooking,setActiveBooking]=React.useState(null);
+  const[fabOpen,setFabOpen]=React.useState(false);
+  const[fabModal,setFabModal]=React.useState(null);
+  const[copyPrefill,setCopyPrefill]=React.useState(null);
+  const[showNotifications,setShowNotifications]=React.useState(false);
+  const[showSearch,setShowSearch]=React.useState(false);
+  const[viewYear,setViewYear]=React.useState(todayDate.getFullYear());
+  const[viewMonth,setViewMonth]=React.useState(todayDate.getMonth());
+
+  // Client directory — rebuilt whenever bookings change
+  const directory=React.useMemo(()=>buildDirectory(bookings),[bookings]);
 
   const handleMonthChange=React.useCallback((year,month)=>{
     const d=new Date(year,month,1);
@@ -665,13 +790,26 @@ const App=()=>{
   },[todayIso]);
   const dayBookings=React.useMemo(()=>bookings.filter(b=>b.date===selected).sort((a,b)=>a.time.localeCompare(b.time)),[bookings,selected]);
   const pendingCount=bookings.filter(b=>b.status==='pending').length;
+
   const handleFabClose=shouldRefresh=>{setFabModal(null);setCopyPrefill(null);if(shouldRefresh)fetchBookings();};
   const handleCopy=booking=>{setCopyPrefill(booking);setFabModal('new');};
   const handleSelectBooking=b=>{setActiveBooking(b);setSelected(b.date);const d=parseLocalDate(b.date);setViewYear(d.getFullYear());setViewMonth(d.getMonth());};
 
+  // Open new booking modal pre-filled from directory (via search)
+  const handleBookFromDirectory=client=>{
+    setCopyPrefill({
+      client:client.name,
+      phone:client.phone,
+      address:client.address,
+      services:[],
+      duration:75,
+    });
+    setFabModal('new');
+  };
+
   return(
-    <div style={{minHeight:'100dvh',background:'var(--bg-page)',display:'flex',flexDirection:'column',fontFamily:"'Nunito Sans', -apple-system, system-ui, sans-serif",color:'var(--text-primary)',maxWidth:480,margin:'0 auto',position:'relative'}}>
-      <div style={{padding:`max(env(safe-area-inset-top), 16px) 22px 8px`,display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--bg-page)',position:'sticky',top:0,zIndex:50,borderBottom:'1px solid var(--border-soft)'}}>
+    <div style={{minHeight:'100dvh',background:'var(--bg-page)',display:'flex',flexDirection:'column',fontFamily:"'Nunito Sans',-apple-system,system-ui,sans-serif",color:'var(--text-primary)',maxWidth:480,margin:'0 auto',position:'relative'}}>
+      <div style={{padding:`max(env(safe-area-inset-top),16px) 22px 8px`,display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--bg-page)',position:'sticky',top:0,zIndex:50,borderBottom:'1px solid var(--border-soft)'}}>
         <img src="/jayna-logo.png" alt="Jayna" style={{width:36,height:36,borderRadius:999,objectFit:'cover'}}/>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
           <button onClick={()=>setShowSearch(true)} style={{width:40,height:40,borderRadius:999,background:'var(--bg-card)',border:'1px solid var(--border-soft)',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name="search" size={17} strokeWidth={1.9}/></button>
@@ -693,32 +831,10 @@ const App=()=>{
         <CalendarSection days={allDays} selected={selected} onSelect={setSelected} bookingDates={bookingDates} todayIso={todayIso} viewYear={viewYear} viewMonth={viewMonth} onMonthChange={handleMonthChange}/>
 
         <div style={{padding:'16px 22px 0',display:'flex',flexDirection:'column',gap:0}}>
-          {loading?(
-            <div style={{background:'var(--bg-card)',border:'1px solid var(--border-soft)',borderRadius:'var(--radius-card)',padding:'40px 22px',display:'flex',flexDirection:'column',alignItems:'center',gap:12,color:'var(--text-muted)'}}>
-              <div style={{width:24,height:24,border:'2px solid var(--border)',borderTopColor:'var(--primary)',borderRadius:999,animation:'spin 0.8s linear infinite'}}/>
-              <div style={{fontSize:13,fontWeight:600}}>Loading schedule…</div>
-            </div>
-          ):error?(
-            <div style={{background:'var(--bg-card)',border:'1px solid var(--border-soft)',borderRadius:'var(--radius-card)',padding:'32px 22px',textAlign:'center'}}>
-              <div style={{width:44,height:44,borderRadius:999,background:'rgba(199,145,69,0.12)',color:'#C79145',display:'inline-flex',alignItems:'center',justifyContent:'center',marginBottom:10}}><Icon name="wifi-off" size={20} strokeWidth={1.8}/></div>
-              <div style={{fontWeight:800,fontSize:15.5,marginBottom:4}}>Couldn't load bookings</div>
-              <div style={{fontSize:12.5,color:'var(--text-muted)',fontWeight:600,marginBottom:16,lineHeight:1.5}}>{error}</div>
-              <button onClick={fetchBookings} style={{padding:'10px 20px',borderRadius:'var(--radius-btn)',background:'var(--primary)',color:'#fff',fontWeight:700,fontSize:13,border:'none',display:'inline-flex',alignItems:'center',gap:8}}><Icon name="refresh" size={14} strokeWidth={2.2} stroke="#fff"/>Retry</button>
-            </div>
-          ):dayBookings.length===0?(
-            <div style={{background:'var(--bg-card)',border:'1px solid var(--border-soft)',borderRadius:'var(--radius-card)',padding:'30px 22px',textAlign:'center'}}>
-              <div style={{width:44,height:44,borderRadius:999,background:'var(--bg-secondary)',color:'var(--text-muted)',display:'inline-flex',alignItems:'center',justifyContent:'center',marginBottom:10}}><Icon name="calendar" size={20} strokeWidth={1.8}/></div>
-              <div style={{fontWeight:800,fontSize:15.5}}>No appointments</div>
-              <div style={{fontSize:12.5,color:'var(--text-muted)',marginTop:3,fontWeight:600}}>Tap + to book a client or block time.</div>
-            </div>
-          ):(
-            dayBookings.map((b,i)=>(
-              <React.Fragment key={b.id}>
-                {i>0&&<DriveTimeRow driveTime={b.driveTime} hasConflict={b.hasConflict}/>}
-                <div style={{marginBottom:i<dayBookings.length-1?0:12}}><BookingCard booking={b} onOpen={setActiveBooking}/></div>
-              </React.Fragment>
-            ))
-          )}
+          {loading?(<div style={{background:'var(--bg-card)',border:'1px solid var(--border-soft)',borderRadius:'var(--radius-card)',padding:'40px 22px',display:'flex',flexDirection:'column',alignItems:'center',gap:12,color:'var(--text-muted)'}}><div style={{width:24,height:24,border:'2px solid var(--border)',borderTopColor:'var(--primary)',borderRadius:999,animation:'spin 0.8s linear infinite'}}/><div style={{fontSize:13,fontWeight:600}}>Loading schedule…</div></div>)
+          :error?(<div style={{background:'var(--bg-card)',border:'1px solid var(--border-soft)',borderRadius:'var(--radius-card)',padding:'32px 22px',textAlign:'center'}}><div style={{width:44,height:44,borderRadius:999,background:'rgba(199,145,69,0.12)',color:'#C79145',display:'inline-flex',alignItems:'center',justifyContent:'center',marginBottom:10}}><Icon name="wifi-off" size={20} strokeWidth={1.8}/></div><div style={{fontWeight:800,fontSize:15.5,marginBottom:4}}>Couldn't load bookings</div><div style={{fontSize:12.5,color:'var(--text-muted)',fontWeight:600,marginBottom:16,lineHeight:1.5}}>{error}</div><button onClick={fetchBookings} style={{padding:'10px 20px',borderRadius:'var(--radius-btn)',background:'var(--primary)',color:'#fff',fontWeight:700,fontSize:13,border:'none',display:'inline-flex',alignItems:'center',gap:8}}><Icon name="refresh" size={14} strokeWidth={2.2} stroke="#fff"/>Retry</button></div>)
+          :dayBookings.length===0?(<div style={{background:'var(--bg-card)',border:'1px solid var(--border-soft)',borderRadius:'var(--radius-card)',padding:'30px 22px',textAlign:'center'}}><div style={{width:44,height:44,borderRadius:999,background:'var(--bg-secondary)',color:'var(--text-muted)',display:'inline-flex',alignItems:'center',justifyContent:'center',marginBottom:10}}><Icon name="calendar" size={20} strokeWidth={1.8}/></div><div style={{fontWeight:800,fontSize:15.5}}>No appointments</div><div style={{fontSize:12.5,color:'var(--text-muted)',marginTop:3,fontWeight:600}}>Tap + to book a client or block time.</div></div>)
+          :(dayBookings.map((b,i)=>(<React.Fragment key={b.id}>{i>0&&<DriveTimeRow driveTime={b.driveTime} hasConflict={b.hasConflict}/>}<div style={{marginBottom:i<dayBookings.length-1?0:12}}><BookingCard booking={b} onOpen={setActiveBooking}/></div></React.Fragment>)))}
         </div>
       </div>
 
@@ -726,13 +842,13 @@ const App=()=>{
       <ExpandFAB open={fabOpen} setOpen={setFabOpen} onPick={kind=>{setFabOpen(false);setFabModal(kind);}}/>
 
       {activeBooking&&<BookingDetailModal booking={activeBooking} onClose={()=>setActiveBooking(null)} onRefresh={fetchBookings} onCopy={handleCopy} serviceCatalogue={services}/>}
-      {fabModal==='new'&&<NewBookingModal onClose={handleFabClose} serviceCatalogue={services} prefill={copyPrefill}/>}
+      {fabModal==='new'&&<NewBookingModal onClose={handleFabClose} serviceCatalogue={services} prefill={copyPrefill} directory={directory}/>}
       {fabModal==='block'&&<BlockTimeModal onClose={()=>setFabModal(null)}/>}
-      {showSearch&&<SearchPanel bookings={bookings} onSelectBooking={handleSelectBooking} onClose={()=>setShowSearch(false)}/>}
+      {showSearch&&<SearchPanel bookings={bookings} directory={directory} onSelectBooking={handleSelectBooking} onOpenNewBooking={handleBookFromDirectory} onClose={()=>setShowSearch(false)}/>}
 
       {showNotifications&&(
         <div className="backdrop-in" style={{position:'fixed',inset:0,zIndex:100,background:'rgba(28,26,22,0.42)',backdropFilter:'blur(2px)',display:'flex',alignItems:'flex-end'}} onClick={()=>setShowNotifications(false)}>
-          <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',maxHeight:'80dvh',overflowY:'auto',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 20px max(env(safe-area-inset-bottom), 24px)'}}>
+          <div className="modal-in" onClick={e=>e.stopPropagation()} style={{width:'100%',maxHeight:'80dvh',overflowY:'auto',background:'var(--bg-card)',borderTopLeftRadius:24,borderTopRightRadius:24,padding:'12px 20px max(env(safe-area-inset-bottom),24px)'}}>
             <div style={{width:38,height:4,borderRadius:2,background:'var(--border)',margin:'4px auto 14px'}}/>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
               <div style={{fontWeight:800,fontSize:20,letterSpacing:-0.3}}>Pending bookings</div>
@@ -743,13 +859,10 @@ const App=()=>{
             ):(
               <div style={{display:'flex',flexDirection:'column',gap:10}}>
                 {bookings.filter(b=>b.status==='pending').map(booking=>(
-                  <button key={booking.id} onClick={()=>{setShowNotifications(false);setActiveBooking(booking);}} style={{padding:0,background:'var(--bg-secondary)',border:'1px solid var(--border-soft)',borderRadius:14,textAlign:'left',cursor:'pointer'}}>
+                  <button key={booking.id} onClick={()=>{setShowNotifications(false);setActiveBooking(booking);}} style={{padding:0,background:'var(--bg-secondary)',border:'1px solid var(--border-soft)',borderRadius:14,textAlign:'left'}}>
                     <div style={{padding:'14px 16px',display:'flex',gap:12,alignItems:'center'}}>
                       <Avatar initials={booking.initials} tone={booking.avatarTone} size={42}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:800,fontSize:15.5,letterSpacing:-0.2}}>{booking.client}</div>
-                        <div style={{fontSize:13,color:'var(--text-muted)',marginTop:2,fontWeight:600}}>{booking.services.join(', ')} · {booking.time}</div>
-                      </div>
+                      <div style={{flex:1,minWidth:0}}><div style={{fontWeight:800,fontSize:15.5,letterSpacing:-0.2}}>{booking.client}</div><div style={{fontSize:13,color:'var(--text-muted)',marginTop:2,fontWeight:600}}>{booking.services.join(', ')} · {booking.time}</div></div>
                       <Icon name="arrow-right" size={16} strokeWidth={2} stroke="var(--text-muted)"/>
                     </div>
                   </button>
