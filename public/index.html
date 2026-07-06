@@ -91,7 +91,7 @@ const AuthGate=({children})=>{
     if(!input.trim())return;
     setChecking(true);setError('');
     try{
-      const res=await authFetch(`${API_URL}/services`,{headers:{'Authorization':`Bearer ${input.trim()}`}});
+      const res=await fetch(`${API_URL}/services`,{headers:{'Authorization':`Bearer ${input.trim()}`}});
       if(res.ok){setToken(input.trim());setAuthed(true);}
       else setError('Incorrect access code');
     }catch{setError('Connection error — try again');}
