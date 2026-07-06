@@ -1,30 +1,28 @@
 /**
- * Bookings routes
- * GET  /bookings              — all bookings (today to 12 months ahead)
- * POST /bookings/create       — create a new booking
- * POST /bookings/:id/confirm  — confirm a pending booking
- * POST /bookings/:id/complete — mark a booking as complete
- * POST /bookings/:id/cancel   — cancel a booking
- * POST /bookings/:id/edit     — edit a booking
+ * Bookings routes (hardened)
+ * - Semantic customFields ({ address, price, notes }) mapped server-side via lib/fields
+ * - Input validation on create/edit
+ * - Generic error responses; upstream details logged only
+ * - No PII in production logs
  */
 
 const express = require('express');
 const router  = express.Router();
 const { getVisits, getServices, confirmVisit, completeVisit, cancelVisit, createVisit, parseVisit } = require('../lib/waitwhile');
 const { broadcast } = require('../lib/websocket');
+const { toCustomFields } = require('../lib/fields');
+const { getLocalDate, TZ } = require('../lib/tz');
 
 const WAITWHILE_BASE = 'https://api.waitwhile.com/v2';
+const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const DEBUG = process.env.DEBUG === 'true';
 
-// ── Adelaide date helper ──────────────────────────────────────
-function getAdelaideDate(offsetDays = 0) {
-  const now     = new Date();
-  const shifted = new Date(now.getTime() + offsetDays * 86400000);
-  const parts   = {};
-  new Intl.DateTimeFormat('en-AU', {
-    timeZone: 'Australia/Adelaide',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(shifted).forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
-  return `${parts.year}-${parts.month}-${parts.day}`;
+function validId(req, res) {
+  if (!ID_RE.test(req.params.id)) {
+    res.status(400).json({ error: 'Invalid booking id' });
+    return false;
+  }
+  return true;
 }
 
 // ── Service catalogue cache ───────────────────────────────────
@@ -44,21 +42,16 @@ async function getCachedServices() {
 }
 
 // ── GET /bookings ─────────────────────────────────────────────
-// Fetches today → 12 months ahead so Jayna can book regulars year-round
 router.get('/', async (req, res) => {
   try {
-    const fromDate = getAdelaideDate(0);
-    const toDate   = getAdelaideDate(365); // 12 months
+    const fromDate = getLocalDate(0);
+    const toDate   = getLocalDate(365);
 
-    const [visits, services] = await Promise.all([
-      getVisits(fromDate, toDate),
-      getCachedServices(),
-    ]);
+    const [visits, services] = await Promise.all([getVisits(fromDate, toDate), getCachedServices()]);
 
     const bookings = visits
       .filter(v => {
         const state = (v.state || '').toUpperCase();
-        // Show everything except hard-cancelled/noshow
         return state !== 'CANCELLED' && state !== 'NOSHOW';
       })
       .map(v => parseVisit(v, services));
@@ -66,100 +59,134 @@ router.get('/', async (req, res) => {
     res.json(bookings);
   } catch (err) {
     console.error('[GET /bookings] Error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch bookings', detail: err.message });
+    res.status(500).json({ error: 'Failed to fetch bookings' });
   }
 });
 
 // ── POST /bookings/create ─────────────────────────────────────
+// Body: { services: [ids], client: { name, phone }, startTime, duration, address?, price?, notes? }
 router.post('/create', async (req, res) => {
   try {
-    const { services: serviceIds, client, startTime, customFields } = req.body;
+    const { services: serviceIds, client, startTime, address, price, notes } = req.body || {};
 
-    if (!client?.name) return res.status(400).json({ error: 'Client name is required' });
+    if (!client?.name || typeof client.name !== 'string' || client.name.length > 120) {
+      return res.status(400).json({ error: 'Valid client name is required' });
+    }
+    if (client.phone && (typeof client.phone !== 'string' || client.phone.length > 20)) {
+      return res.status(400).json({ error: 'Invalid phone' });
+    }
+    if (startTime && isNaN(Date.parse(startTime))) {
+      return res.status(400).json({ error: 'Invalid startTime' });
+    }
+    if (serviceIds && (!Array.isArray(serviceIds) || !serviceIds.every(s => ID_RE.test(s)))) {
+      return res.status(400).json({ error: 'Invalid service ids' });
+    }
+
+    const customFields = toCustomFields({ address, price, notes });
 
     const visit = await createVisit({ services: serviceIds, client, startTime, customFields });
     broadcast('booking_created', { visitId: visit.id });
     res.json({ success: true, visit });
   } catch (err) {
     console.error('[POST /bookings/create] Error:', err.message);
-    res.status(500).json({ error: 'Failed to create booking', detail: err.message });
+    res.status(500).json({ error: 'Failed to create booking' });
   }
 });
 
-// ── POST /bookings/:id/confirm ────────────────────────────────
+// ── State transitions ─────────────────────────────────────────
 router.post('/:id/confirm', async (req, res) => {
+  if (!validId(req, res)) return;
   try {
     const visit = await confirmVisit(req.params.id);
     broadcast('booking_update', { visitId: req.params.id, state: 'BOOKED' });
     res.json({ success: true, visit });
   } catch (err) {
-    console.error(`[POST /bookings/${req.params.id}/confirm] Error:`, err.message);
-    res.status(500).json({ error: 'Failed to confirm booking', detail: err.message });
+    console.error(`[confirm ${req.params.id}]`, err.message);
+    res.status(500).json({ error: 'Failed to confirm booking' });
   }
 });
 
-// ── POST /bookings/:id/complete ───────────────────────────────
 router.post('/:id/complete', async (req, res) => {
+  if (!validId(req, res)) return;
   try {
     const visit = await completeVisit(req.params.id);
     broadcast('booking_update', { visitId: req.params.id, state: 'COMPLETE' });
     res.json({ success: true, visit });
   } catch (err) {
-    console.error(`[POST /bookings/${req.params.id}/complete] Error:`, err.message);
-    res.status(500).json({ error: 'Failed to complete booking', detail: err.message });
+    console.error(`[complete ${req.params.id}]`, err.message);
+    res.status(500).json({ error: 'Failed to complete booking' });
   }
 });
 
-// ── POST /bookings/:id/cancel ─────────────────────────────────
 router.post('/:id/cancel', async (req, res) => {
+  if (!validId(req, res)) return;
   try {
     const visit = await cancelVisit(req.params.id);
     broadcast('booking_cancelled', { visitId: req.params.id });
     res.json({ success: true, visit });
   } catch (err) {
-    console.error(`[POST /bookings/${req.params.id}/cancel] Error:`, err.message);
-    res.status(500).json({ error: 'Failed to cancel booking', detail: err.message });
+    console.error(`[cancel ${req.params.id}]`, err.message);
+    res.status(500).json({ error: 'Failed to cancel booking' });
   }
 });
 
 // ── POST /bookings/:id/edit ───────────────────────────────────
-// Waitwhile uses POST (not PATCH) to update visits
+// Body: { phone?, startTime?, duration? (minutes), services?, address?, price?, notes? }
 router.post('/:id/edit', async (req, res) => {
+  if (!validId(req, res)) return;
   try {
     const { id } = req.params;
-    const { phone, startTime, duration, services, customFields } = req.body;
+    const { phone, startTime, duration, services, address, price } = req.body || {};
 
     const visitBody = {};
 
     if (startTime) {
-      const dt          = new Date(startTime);
-      const adelaideFmt = new Intl.DateTimeFormat('en-AU', {
-        timeZone: 'Australia/Adelaide',
+      if (isNaN(Date.parse(startTime))) return res.status(400).json({ error: 'Invalid startTime' });
+      const dt  = new Date(startTime);
+      const fmt = new Intl.DateTimeFormat('en-AU', {
+        timeZone: TZ,
         year: 'numeric', month: '2-digit', day: '2-digit',
         hour: '2-digit', minute: '2-digit', hour12: false,
       });
       const parts = {};
-      adelaideFmt.formatToParts(dt).forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
+      fmt.formatToParts(dt).forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
       visitBody.date = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
     }
 
-    if (duration)                        visitBody.duration    = duration * 60; // minutes → seconds
-    if (services && services.length > 0) visitBody.serviceIds  = services;
-    if (phone)                           visitBody.phone       = phone;
-    if (customFields)                    visitBody.dataFields  = customFields;
+    if (duration !== undefined) {
+      const mins = Number(duration);
+      if (!Number.isFinite(mins) || mins < 5 || mins > 720) {
+        return res.status(400).json({ error: 'duration must be 5–720 minutes' });
+      }
+      visitBody.duration = mins * 60;
+    }
 
-    console.log(`[POST /bookings/${id}/edit] Sending:`, JSON.stringify(visitBody, null, 2));
+    if (services) {
+      if (!Array.isArray(services) || !services.every(s => ID_RE.test(s))) {
+        return res.status(400).json({ error: 'Invalid service ids' });
+      }
+      if (services.length > 0) visitBody.serviceIds = services;
+    }
 
-    const apiRes = await fetch(`${WAITWHILE_BASE}/visits/${id}`, {
+    if (phone) {
+      if (typeof phone !== 'string' || phone.length > 20) return res.status(400).json({ error: 'Invalid phone' });
+      visitBody.phone = phone;
+    }
+
+    const customFields = toCustomFields({ address, price });
+    if (customFields.length > 0) visitBody.dataFields = customFields;
+
+    if (DEBUG) console.log(`[edit ${id}] Sending:`, JSON.stringify(visitBody)); // PII — debug only
+
+    const apiRes = await fetch(`${WAITWHILE_BASE}/visits/${encodeURIComponent(id)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': process.env.WAITWHILE_API_KEY },
       body: JSON.stringify(visitBody),
     });
 
     if (!apiRes.ok) {
-      const errBody = await apiRes.text();
-      console.error(`[POST /bookings/${id}/edit] Waitwhile error:`, errBody);
-      throw new Error(`Waitwhile POST failed (${apiRes.status}): ${errBody}`);
+      console.error(`[edit ${id}] Waitwhile error:`, apiRes.status, await apiRes.text());
+      return res.status(502).json({ error: 'Failed to update booking' });
     }
 
     const data = await apiRes.json();
@@ -167,7 +194,7 @@ router.post('/:id/edit', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('[POST /bookings/:id/edit]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to update booking' });
   }
 });
 

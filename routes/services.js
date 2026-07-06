@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
     res.json(catalogue);
   } catch (err) {
     console.error('[GET /services] Error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch services', detail: err.message });
+    res.status(500).json({ error: 'Failed to fetch services' });
   }
 });
 

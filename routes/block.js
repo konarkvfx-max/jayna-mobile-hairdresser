@@ -1,15 +1,24 @@
-// Replace /routes/block.js with this:
+/**
+ * Block route (hardened)
+ * POST /block — block out time. Body: { date: 'YYYY-MM-DD', start: 'HH:MM', end: 'HH:MM', reason? }
+ * - Full input validation
+ * - DST-correct offsets via lib/tz (no hand-rolled day-of-year math)
+ */
 
 const express = require('express');
 const router = express.Router();
 const { broadcast } = require('../lib/websocket');
+const { buildLocalTime } = require('../lib/tz');
+
 const WAITWHILE_BASE = 'https://api.waitwhile.com/v2';
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function timeToDuration(start, end) {
   const [sh, sm] = start.split(':').map(Number);
   const [eh, em] = end.split(':').map(Number);
   const totalMinutes = (eh * 60 + em) - (sh * 60 + sm);
-  if (totalMinutes <= 0) throw new Error('End time must be after start time');
+  if (totalMinutes <= 0) return null;
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   let duration = 'PT';
@@ -18,49 +27,43 @@ function timeToDuration(start, end) {
   return duration;
 }
 
-function buildAdelaideTime(dateStr, timeStr) {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  const dayOfYear = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 86400000);
-  const isDaylight = dayOfYear >= 274 || dayOfYear < 121;
-  const offset = isDaylight ? '+10:30' : '+09:30';
-  return `${dateStr}T${timeStr}:00${offset}`;
-}
-
 router.post('/', async (req, res) => {
   try {
-    const { date, start, end, reason } = req.body;
-    if (!date || !start || !end) {
-      return res.status(400).json({ error: 'date, start, and end are required' });
+    const { date, start, end, reason } = req.body || {};
+
+    if (!DATE_RE.test(date || '')) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    if (!TIME_RE.test(start || '')) return res.status(400).json({ error: 'start must be HH:MM (24h)' });
+    if (!TIME_RE.test(end || ''))   return res.status(400).json({ error: 'end must be HH:MM (24h)' });
+    if (reason !== undefined && (typeof reason !== 'string' || reason.length > 100)) {
+      return res.status(400).json({ error: 'reason must be a string (max 100 chars)' });
     }
 
     const duration = timeToDuration(start, end);
-    const startTime = buildAdelaideTime(date, start);
+    if (!duration) return res.status(400).json({ error: 'end time must be after start time' });
+
+    const startTime = buildLocalTime(date, start);
 
     const body = {
       locationId: process.env.WAITWHILE_LOCATION_ID,
-      name: `⛔ ${reason || 'Blocked'}`,
-      phone: '+61000000000', // Dummy phone
+      name: `⛔ ${(reason || 'Blocked').trim()}`,
+      phone: '+61000000000',
       startTime,
       duration,
-      status: 'confirmed', // Use valid Waitwhile status
+      status: 'confirmed',
       serviceIds: [],
       customFields: [],
-      resourceIds: [], // If you have resource blocking, add here
+      resourceIds: [],
     };
 
     const apiRes = await fetch(`${WAITWHILE_BASE}/visits`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': process.env.WAITWHILE_API_KEY,
-      },
+      headers: { 'Content-Type': 'application/json', 'apikey': process.env.WAITWHILE_API_KEY },
       body: JSON.stringify(body),
     });
 
     if (!apiRes.ok) {
-      const errBody = await apiRes.text();
-      throw new Error(`Waitwhile block failed (${apiRes.status}): ${errBody}`);
+      console.error('[POST /block] Waitwhile error:', apiRes.status, await apiRes.text());
+      return res.status(502).json({ error: 'Failed to block time' });
     }
 
     const visit = await apiRes.json();
@@ -68,7 +71,7 @@ router.post('/', async (req, res) => {
     res.json({ success: true, visit });
   } catch (err) {
     console.error('[POST /block] Error:', err.message);
-    res.status(500).json({ error: 'Failed to block time', detail: err.message });
+    res.status(500).json({ error: 'Failed to block time' });
   }
 });
 

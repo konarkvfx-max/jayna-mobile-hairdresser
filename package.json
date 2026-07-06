@@ -1,7 +1,7 @@
 {
   "name": "jayna-mobile-hairdresser",
   "version": "1.0.0",
-  "description": "Backend server for Jayna Mobile Hairdresser — daily schedule app with Waitwhile + Google Maps integration",
+  "description": "Backend server for Jayna Mobile Hairdresser \u2014 daily schedule app with Waitwhile + Google Maps integration",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -14,6 +14,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "helmet": "^8.0.0",
+    "express-rate-limit": "^7.4.1"
   }
 }

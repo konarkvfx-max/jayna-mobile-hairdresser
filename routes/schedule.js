@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
     res.json(bookings);
   } catch (err) {
     console.error('[GET /schedule-with-drive-times] Error:', err.message);
-    res.status(500).json({ error: 'Failed to build schedule', detail: err.message });
+    res.status(500).json({ error: 'Failed to build schedule' });
   }
 });
 

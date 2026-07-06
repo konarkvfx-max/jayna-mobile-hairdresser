@@ -43,6 +43,76 @@
 <script type="text/babel">
 const API_URL='';
 
+// ── Auth: single shared token (PIN gate stores it) ────────────
+const TOKEN_KEY='jayna_auth_token';
+const getToken=()=>localStorage.getItem(TOKEN_KEY)||'';
+const setToken=t=>localStorage.setItem(TOKEN_KEY,t);
+const clearToken=()=>localStorage.removeItem(TOKEN_KEY);
+async function authFetch(url,opts={}){
+  const res=await fetch(url,{...opts,headers:{...(opts.headers||{}),'Authorization':`Bearer ${getToken()}`}});
+  if(res.status===401){clearToken();window.dispatchEvent(new Event('jayna-unauthorized'));}
+  return res;
+}
+
+// ── Toast system (replaces alert) ─────────────────────────────
+let _toastFn=null;
+function toast(msg,tone='error'){if(_toastFn)_toastFn(msg,tone);else console.warn('[toast]',msg);}
+const ToastHost=()=>{
+  const[toasts,setToasts]=React.useState([]);
+  React.useEffect(()=>{
+    _toastFn=(msg,tone)=>{
+      const id=Date.now()+Math.random();
+      setToasts(t=>[...t,{id,msg,tone}]);
+      setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4000);
+    };
+    return()=>{_toastFn=null;};
+  },[]);
+  return(
+    <div style={{position:'fixed',top:'max(env(safe-area-inset-top),12px)',left:0,right:0,zIndex:400,display:'flex',flexDirection:'column',alignItems:'center',gap:8,pointerEvents:'none'}}>
+      {toasts.map(t=>(
+        <div key={t.id} className="modal-in" style={{pointerEvents:'auto',maxWidth:'88%',background:t.tone==='error'?'#B36B6B':'var(--primary-deep)',color:'#fff',padding:'11px 18px',borderRadius:12,fontSize:13.5,fontWeight:700,boxShadow:'0 4px 16px rgba(40,35,25,0.18)'}}>{t.msg}</div>
+      ))}
+    </div>
+  );
+};
+
+// ── PIN gate ──────────────────────────────────────────────────
+const AuthGate=({children})=>{
+  const[authed,setAuthed]=React.useState(!!getToken());
+  const[input,setInput]=React.useState('');
+  const[checking,setChecking]=React.useState(false);
+  const[error,setError]=React.useState('');
+  React.useEffect(()=>{
+    const onUnauth=()=>setAuthed(false);
+    window.addEventListener('jayna-unauthorized',onUnauth);
+    return()=>window.removeEventListener('jayna-unauthorized',onUnauth);
+  },[]);
+  const submit=async()=>{
+    if(!input.trim())return;
+    setChecking(true);setError('');
+    try{
+      const res=await authFetch(`${API_URL}/services`,{headers:{'Authorization':`Bearer ${input.trim()}`}});
+      if(res.ok){setToken(input.trim());setAuthed(true);}
+      else setError('Incorrect access code');
+    }catch{setError('Connection error — try again');}
+    setChecking(false);
+  };
+  if(authed)return children;
+  return(
+    <div className="screen" style={{minHeight:'100dvh',display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
+      <div style={{width:'100%',maxWidth:340,textAlign:'center'}}>
+        <div style={{fontSize:34,marginBottom:8}}>✂️</div>
+        <div style={{fontWeight:900,fontSize:24,letterSpacing:-0.4,marginBottom:4}}>Jayna</div>
+        <div style={{fontSize:13.5,color:'var(--text-muted)',fontWeight:600,marginBottom:22}}>Enter your access code to continue</div>
+        <input type="password" autoFocus value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="Access code" style={{width:'100%',boxSizing:'border-box',padding:'14px 16px',borderRadius:12,border:'1px solid var(--border)',background:'var(--bg-card)',fontSize:16,fontWeight:700,textAlign:'center',outline:'none',letterSpacing:2}}/>
+        {error&&<div style={{color:'#B36B6B',fontSize:13,fontWeight:700,marginTop:10}}>{error}</div>}
+        <button onClick={submit} disabled={checking} style={{width:'100%',marginTop:14,padding:'14px 16px',borderRadius:12,background:'var(--primary)',color:'#fff',fontWeight:800,fontSize:15,opacity:checking?0.6:1}}>{checking?'Checking…':'Unlock'}</button>
+      </div>
+    </div>
+  );
+};
+
+
 // ── Helpers ───────────────────────────────────────────────────
 function getAdelaideToday(){
   const parts=new Intl.DateTimeFormat('en-AU',{timeZone:'Australia/Adelaide',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
@@ -406,10 +476,10 @@ const BookingDetailModal=({booking,onClose,onRefresh,onCopy,serviceCatalogue})=>
   const[editCustomDur,setEditCustomDur]=React.useState(!DURATION_PRESETS.includes(booking.duration));
   const toggleService=s=>setEditServices(prev=>prev.includes(s)?prev.filter(x=>x!==s):[...prev,s]);
 
-  const handleConfirm=async()=>{setWorking(true);try{const res=await fetch(`${API_URL}/bookings/${booking.id}/confirm`,{method:'POST'});if(res.ok){setConfirmed(true);onRefresh?.();}}catch(e){console.error(e);}setWorking(false);};
-  const handleCancel=async()=>{if(!window.confirm(`Cancel ${booking.client}'s appointment?`))return;setWorking(true);try{await fetch(`${API_URL}/bookings/${booking.id}/cancel`,{method:'POST'});onRefresh?.();onClose();}catch(e){console.error(e);}setWorking(false);};
-  const handleComplete=async()=>{if(!window.confirm(`Mark ${booking.client}'s appointment as complete?`))return;setWorking(true);try{const res=await fetch(`${API_URL}/bookings/${booking.id}/complete`,{method:'POST'});if(res.ok){setCompleted(true);setConfirmed(true);onRefresh?.();}else{const e=await res.json();alert('Could not mark complete: '+(e.detail||e.error));}}catch(e){console.error(e);alert('Network error. Try again.');}setWorking(false);};
-  const handleEdit=async()=>{setWorking(true);try{const offset=adelaideOffset(editDate);const startTime=`${editDate}T${editTime}:00${offset}`;const serviceIds=(serviceCatalogue||[]).filter(s=>editServices.includes(s.name)).map(s=>s.id);const visitBody={phone:editPhone,startTime,duration:editDuration,...(serviceIds.length>0&&{services:serviceIds}),customFields:[{id:'Tsg5TJ2XhBD523zVvenw',values:[editAddress]},{id:'ZCuDrgB7eDIpoDxDV90v',values:[String(editPrice)]}]};const visitRes=await fetch(`${API_URL}/bookings/${booking.id}/edit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(visitBody)});if(!visitRes.ok)throw new Error(`Visit update failed (${visitRes.status})`);if(editNotes&&booking.customerId){await fetch(`${API_URL}/customers/${booking.customerId}/notes`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({customFields:[{id:'EsyazvahjsF62K862TEy',values:[editNotes]}]})});}setShowEdit(false);localStorage.setItem(`booking_price_${booking.id}`,String(editPrice));onRefresh?.();}catch(e){console.error('Edit error:',e);alert('Failed to save changes. Try again.');}setWorking(false);};
+  const handleConfirm=async()=>{setWorking(true);try{const res=await authFetch(`${API_URL}/bookings/${booking.id}/confirm`,{method:'POST'});if(res.ok){setConfirmed(true);onRefresh?.();}}catch(e){console.error(e);}setWorking(false);};
+  const handleCancel=async()=>{if(!window.confirm(`Cancel ${booking.client}'s appointment?`))return;setWorking(true);try{await authFetch(`${API_URL}/bookings/${booking.id}/cancel`,{method:'POST'});onRefresh?.();onClose();}catch(e){console.error(e);}setWorking(false);};
+  const handleComplete=async()=>{if(!window.confirm(`Mark ${booking.client}'s appointment as complete?`))return;setWorking(true);try{const res=await authFetch(`${API_URL}/bookings/${booking.id}/complete`,{method:'POST'});if(res.ok){setCompleted(true);setConfirmed(true);onRefresh?.();}else{const e=await res.json();toast('Could not mark complete. Try again.');}}catch(e){console.error(e);toast('Network error. Try again.');}setWorking(false);};
+  const handleEdit=async()=>{setWorking(true);try{const offset=adelaideOffset(editDate);const startTime=`${editDate}T${editTime}:00${offset}`;const serviceIds=(serviceCatalogue||[]).filter(s=>editServices.includes(s.name)).map(s=>s.id);const visitBody={phone:editPhone,startTime,duration:editDuration,...(serviceIds.length>0&&{services:serviceIds}),address:editAddress,price:String(editPrice)};const visitRes=await authFetch(`${API_URL}/bookings/${booking.id}/edit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(visitBody)});if(!visitRes.ok)throw new Error(`Visit update failed (${visitRes.status})`);if(editNotes&&booking.customerId){await authFetch(`${API_URL}/customers/${booking.customerId}/notes`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({notes:editNotes})});}setShowEdit(false);onRefresh?.();}catch(e){console.error('Edit error:',e);toast('Failed to save changes. Try again.');}setWorking(false);};
 
   const noteText=[booking.notes,booking.hairDescription,booking.colourHistory,booking.mobilityNeeds,booking.extraNotes].filter(Boolean).join(' · ');
   return(
@@ -518,17 +588,17 @@ const NewBookingModal=({onClose,serviceCatalogue,prefill,directory})=>{
   },[date,time,duration,isCopy,prefill?.id]);
 
   const handleSave=async()=>{
-    if(!client.trim()||!address.trim()){alert('Please fill in client name and address.');return;}
+    if(!client.trim()||!address.trim()){toast('Please fill in client name and address.');return;}
     if(clashes.length>0){const ok=window.confirm(`This overlaps with ${clashes.map(b=>b.client).join(', ')}. Book anyway?`);if(!ok)return;}
     setSaving(true);
     try{
       const serviceIds=(serviceCatalogue||[]).filter(s=>services.includes(s.name)).map(s=>s.id);
       const[h,m]=time.split(':').map(Number);
       const start=parseLocalDate(date);start.setHours(h,m,0,0);
-      const res=await fetch(`${API_URL}/bookings/create`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({services:serviceIds,client:{name:client.trim(),phone:phone.trim()},startTime:start.toISOString(),duration,customFields:[{id:'Tsg5TJ2XhBD523zVvenw',values:[address.trim()]}]})});
+      const res=await authFetch(`${API_URL}/bookings/create`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({services:serviceIds,client:{name:client.trim(),phone:phone.trim()},startTime:start.toISOString(),duration,address:address.trim()})});
       if(!res.ok)throw new Error(`HTTP ${res.status}`);
       onClose(true);
-    }catch(e){console.error(e);alert("Couldn't create booking. Check connection and try again.");}
+    }catch(e){console.error(e);toast("Couldn't create booking. Check connection and try again.");}
     setSaving(false);
   };
 
@@ -575,7 +645,7 @@ const BlockTimeModal=({onClose})=>{
   const[end,setEnd]=React.useState('14:00');
   const[reason,setReason]=React.useState('Lunch break');
   const presets=['Lunch break','Personal','Travel time','Day off'];
-  const handleSave=async()=>{try{await fetch(`${API_URL}/block`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,start,end,reason})});}catch(e){console.error(e);}onClose();};
+  const handleSave=async()=>{try{await authFetch(`${API_URL}/block`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,start,end,reason})});}catch(e){console.error(e);}onClose();};
   return(
     <SheetModal title="Block time" subtitle="Mark yourself unavailable" onClose={onClose}>
       <Field label="Reason"><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{presets.map(p=><Chip key={p} active={reason===p} onClick={()=>setReason(p)}>{p}</Chip>)}</div></Field>
@@ -751,7 +821,7 @@ const App=()=>{
   const [directory,setDirectory]=React.useState([]);
 
   React.useEffect(()=>{
-    fetch(`${API_URL}/customers`)
+    authFetch(`${API_URL}/customers`)
       .then(r=>r.ok?r.json():[])
       .then(customers=>{
         // Merge: booking-derived data overrides for clients with recent visits
@@ -796,7 +866,7 @@ const App=()=>{
   const fetchBookings=React.useCallback(async()=>{
     setError(null);
     try{
-      const res=await fetch(`${API_URL}/bookings`);
+      const res=await authFetch(`${API_URL}/bookings`);
       if(!res.ok)throw new Error(`Server error (${res.status})`);
       const data=await res.json();
       setBookings(data);window.__allBookings=data;
@@ -808,10 +878,10 @@ const App=()=>{
 
   React.useEffect(()=>{
     fetchBookings();
-    fetch(`${API_URL}/services`).then(r=>r.ok?r.json():[]).then(setServices).catch(()=>{});
+    authFetch(`${API_URL}/services`).then(r=>r.ok?r.json():[]).then(setServices).catch(()=>{});
     const proto=location.protocol==='https:'?'wss:':'ws:';
     let ws,retry;
-    const connect=()=>{try{ws=new WebSocket(`${proto}//${location.host}`);ws.onmessage=({data})=>{try{const msg=JSON.parse(data);if(['booking_update','refresh','booking_created','booking_cancelled'].includes(msg.type))fetchBookings();}catch{}};ws.onclose=()=>{retry=setTimeout(connect,5000);};ws.onerror=()=>ws.close();}catch{}};
+    const connect=()=>{try{ws=new WebSocket(`${proto}//${location.host}/?token=${encodeURIComponent(getToken())}`);ws.onmessage=({data})=>{try{const msg=JSON.parse(data);if(['booking_update','refresh','booking_created','booking_cancelled'].includes(msg.type))fetchBookings();}catch{}};ws.onclose=()=>{retry=setTimeout(connect,5000);};ws.onerror=()=>ws.close();}catch{}};
     connect();
     return()=>{ws?.close();clearTimeout(retry);};
   },[fetchBookings]);
@@ -910,7 +980,7 @@ const App=()=>{
   );
 };
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+ReactDOM.createRoot(document.getElementById('root')).render(<AuthGate><ToastHost/><App/></AuthGate>);
 </script>
 </body>
 </html>
